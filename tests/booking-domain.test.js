@@ -160,6 +160,19 @@ test('enforces requester edit and cancel rules by booking status and ownership',
   assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'rejected' }, 'heppy@opexcg.com'), false);
   assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'cancelled' }, 'heppy@opexcg.com'), false);
   assert.equal(domain.canRequesterCancel({ createdBy: 'other@opexcg.com', status: 'approved' }, 'heppy@opexcg.com'), false);
+
+  assert.equal(domain.canAdminCancel({ status: 'approved' }, true), true);
+  assert.equal(domain.canAdminCancel({ status: 'confirmed' }, true), true);
+  assert.equal(domain.canAdminCancel({ status: 'pending' }, true), false);
+  assert.equal(domain.canAdminCancel({ status: 'rejected' }, true), false);
+  assert.equal(domain.canAdminCancel({ status: 'cancelled' }, true), false);
+  assert.equal(domain.canAdminCancel({ status: 'approved' }, false), false);
+
+  assert.deepEqual(
+    domain.validateAdminCancellation({ cancellationReason: '  Vehicle under maintenance  ' }),
+    { cancellationReason: 'Vehicle under maintenance' }
+  );
+  assert.throws(() => domain.validateAdminCancellation({ cancellationReason: '   ' }), /Cancellation reason is required/);
 });
 
 test('filters My Bookings by current user and time range presets (default this_week)', () => {

@@ -89,9 +89,14 @@
       if (status === 'rejected') {
         return details.reviewedBy ? 'Rejected by: ' + details.reviewedBy : 'Rejected by administrator';
       }
-      return details.deviceName || details.deviceId
-        ? 'Previous vehicle: ' + fmt.resolveDeviceName(details, state.devices)
+      var cancelledByOther = details.cancelledBy &&
+        String(details.cancelledBy).toLowerCase() !== String(state.currentUserName || '').toLowerCase();
+      var prefix = cancelledByOther
+        ? 'Cancelled by administrator (' + details.cancelledBy + ')'
         : 'Cancelled booking';
+      return details.deviceName || details.deviceId
+        ? prefix + ' | Previous vehicle: ' + fmt.resolveDeviceName(details, state.devices)
+        : prefix;
     }
 
     function renderList() {
@@ -158,6 +163,13 @@
           notes.textContent = (status === 'rejected' ? 'Rejection reason: ' : 'Admin notes: ') +
             details.approvalNotes;
           content.appendChild(notes);
+        }
+
+        if (status === 'cancelled' && details.cancellationReason) {
+          var cancelReason = document.createElement('p');
+          cancelReason.className = 'notes-callout notes-callout-rejected';
+          cancelReason.textContent = 'Cancellation reason: ' + details.cancellationReason;
+          content.appendChild(cancelReason);
         }
 
         card.appendChild(content);
@@ -295,6 +307,7 @@
         var now = new Date().toISOString();
         var details = Object.assign({}, record.details, {
           status: 'cancelled',
+          cancelledBy: state.currentUserName,
           cancelledAtUtc: now,
           updatedAtUtc: now
         });

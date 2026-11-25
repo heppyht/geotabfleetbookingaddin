@@ -15,7 +15,7 @@ A lightweight, browser-hosted MyGeotab custom page add-in for requesting, approv
 | Section | Current behavior |
 | --- | --- |
 | **Booking** | Submit new booking requests (initial status `Pending`). Displays only bookings created by the signed-in user with a time-range filter (default `This week`). Pending bookings can be edited or cancelled; approved (and legacy confirmed) bookings can only be cancelled. |
-| **Approval** | Visible and accessible only to users with **Administrator** security clearance (hidden for non-Administrators with code-level guards). Administrators can **Approve** (must select an active vehicle and an active driver; optional notes; checks vehicle and driver overlaps) or **Reject** (mandatory notes). |
+| **Approval** | Visible and accessible only to users with **Administrator** security clearance (hidden for non-Administrators with code-level guards). Administrators can **Approve** (must select an active vehicle and an active driver; optional notes; checks vehicle and driver overlaps), **Reject** (mandatory notes), or **Cancel** an approved/legacy confirmed booking (mandatory reason). |
 | **Users** | Read-only directory of user records visible to the current MyGeotab session, with search, account status, functional role, driver status, and resolved Clearance labels. |
 | **Reports** | Read-only booking history with date-range, vehicle, status, and requester filters; summary counts, assigned vehicle/driver/destination/notes columns, and pagination. |
 | **Vehicles** | View vehicles available to the current account, including active and inactive vehicles. |

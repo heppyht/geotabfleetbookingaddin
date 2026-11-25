@@ -21,9 +21,9 @@ Add-in menggunakan pola **Request → Approval & Dispatch** (*pool vehicle manag
    - Administrator meninjau booking berstatus `pending` dan memilih salah satu keputusan:
      - **Approve:** wajib memilih **Vehicle** (kendaraan berstatus `Active`) dan **Driver** (pengguna dengan `isDriver === true` dan Account Status `Active`). Field **Notes** (`approvalNotes`) bersifat opsional. Status berubah menjadi **`approved`**.
      - **Reject:** tanpa memilih Vehicle maupun Driver. Field **Notes** (`approvalNotes`) **wajib diisi** sebagai alasan penolakan. Status berubah menjadi **`rejected`**.
-3. **Pembatalan & Perubahan oleh Pemohon:**
+3. **Pembatalan & Perubahan:**
    - Status **`pending`**: pemohon boleh **Edit** (mengubah waktu, purpose, dan destination) atau **Cancel**.
-   - Status **`approved`** (dan status legacy **`confirmed`**): pemohon **hanya boleh Cancel** dan **tidak boleh Edit**. Jika terjadi kesalahan approval atau perubahan jadwal, booking dibatalkan lalu pemohon membuat booking baru.
+   - Status **`approved`** (dan status legacy **`confirmed`**): **tidak boleh Edit**, tetapi dapat di-**Cancel** baik oleh pemohon (di halaman **Booking**) maupun oleh **Administrator** (di halaman **Approval**, dengan **alasan pembatalan wajib**). Jika terjadi kesalahan approval atau perubahan jadwal, booking dibatalkan lalu pemohon membuat booking baru.
    - Status **`rejected`** dan **`cancelled`**: bersifat *read-only*.
 
 ### Diagram transisi status
@@ -34,7 +34,7 @@ Add-in menggunakan pola **Request → Approval & Dispatch** (*pool vehicle manag
                        ├── (Requester Cancel)   ──► cancelled
                        ├── (Admin Reject+Notes) ──► rejected
                        └── (Admin Approve + Vehicle + Driver) ──► approved
-                                                                     └── (Requester Cancel) ──► cancelled
+                                                                     └── (Requester / Admin Cancel) ──► cancelled
 ```
 
 ## Model data (`AddInData.details`)
@@ -62,7 +62,9 @@ Simpan satu booking per `AddInData` record. Struktur `details` target:
   "approvalNotes": "",
   "reviewedBy": null,
   "reviewedAtUtc": null,
-  "cancelledAtUtc": null
+  "cancelledBy": null,
+  "cancelledAtUtc": null,
+  "cancellationReason": ""
 }
 ```
 

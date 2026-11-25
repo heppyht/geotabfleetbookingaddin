@@ -126,11 +126,21 @@
 
       filteredBookings.slice(pageStart, pageEnd).forEach(function (record) {
         var details = record.details || {};
+        var status = domain.normalizeStatus(details.status);
         var row = document.createElement('tr');
-        var reviewerSuffix = details.reviewedBy ? ' (' + details.reviewedBy + ')' : '';
-        var notesText = details.approvalNotes
-          ? details.approvalNotes + reviewerSuffix
-          : (details.reviewedBy ? 'Reviewed by ' + details.reviewedBy : '-');
+        var notesParts = [];
+        if (details.approvalNotes) {
+          notesParts.push(details.approvalNotes + (details.reviewedBy ? ' (' + details.reviewedBy + ')' : ''));
+        } else if (details.reviewedBy) {
+          notesParts.push('Reviewed by ' + details.reviewedBy);
+        }
+        if (status === 'cancelled' && details.cancellationReason) {
+          notesParts.push(
+            'Cancelled: ' + details.cancellationReason +
+              (details.cancelledBy ? ' (' + details.cancelledBy + ')' : '')
+          );
+        }
+        var notesText = notesParts.length ? notesParts.join(' | ') : '-';
 
         var cells = [
           fmt.resolveDeviceName(details, state.devices),

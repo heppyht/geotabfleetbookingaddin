@@ -229,8 +229,123 @@
     return panel;
   }
 
+  function buildCancelForm(options) {
+    var record = options.record;
+    var isSubmitting = options.isSubmitting;
+
+    var panel = document.createElement('div');
+    panel.className = 'approval-review-panel';
+
+    var form = document.createElement('form');
+    form.className = 'approval-review-form';
+    form.setAttribute('data-admin-cancel-form', record.id);
+
+    var reasonField = document.createElement('div');
+    reasonField.className = 'field field-wide';
+    var reasonLabel = document.createElement('label');
+    var reasonId = 'approval-cancel-reason-' + record.id;
+    reasonLabel.htmlFor = reasonId;
+    reasonLabel.textContent = 'Cancellation reason *';
+    var reasonInput = document.createElement('textarea');
+    reasonInput.id = reasonId;
+    reasonInput.name = 'cancellationReason';
+    reasonInput.maxLength = 300;
+    reasonInput.required = true;
+    reasonInput.placeholder = 'Explain why this approved booking is being cancelled (e.g. vehicle maintenance, wrong assignment)';
+    reasonField.appendChild(reasonLabel);
+    reasonField.appendChild(reasonInput);
+
+    var inlineError = document.createElement('p');
+    inlineError.className = 'approval-inline-error';
+    inlineError.setAttribute('role', 'alert');
+    inlineError.hidden = true;
+
+    var actions = document.createElement('div');
+    actions.className = 'form-actions field-wide';
+    var submitBtn = document.createElement('button');
+    submitBtn.type = 'submit';
+    submitBtn.className = 'fm-btn-reject';
+    submitBtn.textContent = 'Confirm cancellation';
+    submitBtn.setAttribute('data-review-submit', 'true');
+    submitBtn.disabled = Boolean(isSubmitting);
+
+    var closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'secondary';
+    closeBtn.textContent = 'Keep booking';
+    closeBtn.setAttribute('data-close-review', 'true');
+
+    actions.appendChild(submitBtn);
+    actions.appendChild(closeBtn);
+
+    form.appendChild(reasonField);
+    form.appendChild(inlineError);
+    form.appendChild(actions);
+    panel.appendChild(form);
+    return panel;
+  }
+
+  function createSummaryItem(labelText, valueText, subText) {
+    var item = document.createElement('div');
+    item.className = 'trip-summary-item';
+
+    var label = document.createElement('span');
+    label.className = 'trip-summary-label';
+    label.textContent = labelText;
+    item.appendChild(label);
+
+    var value = document.createElement('span');
+    value.className = 'trip-summary-value';
+    value.textContent = valueText;
+    item.appendChild(value);
+
+    if (subText) {
+      var sub = document.createElement('span');
+      sub.className = 'trip-summary-sub';
+      sub.textContent = subText;
+      item.appendChild(sub);
+    }
+    return item;
+  }
+
+  function buildTripSummaryGrid(options) {
+    var details = options.details || {};
+    var users = options.users || [];
+    var userDomain = options.userDomain;
+    var fmt = options.formatters;
+
+    var email = String(details.createdBy || '').trim();
+    var requesterName = email || 'Unknown';
+    var requesterSub = '';
+    if (email) {
+      var matched = users.find(function (user) {
+        return user && String(user.login || '').toLowerCase() === email.toLowerCase();
+      });
+      if (matched) {
+        var fullName = userDomain.getUserFullName(matched);
+        if (fullName.toLowerCase() !== email.toLowerCase()) {
+          requesterName = fullName;
+          requesterSub = email;
+        }
+      }
+    }
+
+    var schedule = fmt.getScheduleSummary(details.startUtc, details.endUtc);
+    var timeSub = schedule.durationText ? 'Duration: ' + schedule.durationText : '';
+
+    var grid = document.createElement('div');
+    grid.className = 'trip-summary-grid';
+    grid.appendChild(createSummaryItem('Requester', requesterName, requesterSub));
+    grid.appendChild(createSummaryItem('Date', schedule.dateText));
+    grid.appendChild(createSummaryItem('Time & duration', schedule.timeText, timeSub));
+    grid.appendChild(createSummaryItem('Submitted', fmt.formatSubmittedAt(details.createdAtUtc)));
+    return grid;
+  }
+
   root.FleetAddIn = root.FleetAddIn || {};
   root.FleetAddIn.ApprovalReviewForm = {
-    build: build
+    build: build,
+    buildCancelForm: buildCancelForm,
+    buildTripSummaryGrid: buildTripSummaryGrid
   };
 }(typeof globalThis !== 'undefined' ? globalThis : this));

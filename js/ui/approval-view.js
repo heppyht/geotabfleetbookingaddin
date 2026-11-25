@@ -32,57 +32,6 @@
       });
     }
 
-    function resolveRequester(login) {
-      var email = String(login || '').trim();
-      if (!email) return { name: 'Unknown', subtext: '' };
-      var matched = state.users.find(function (user) {
-        return user && String(user.login || '').toLowerCase() === email.toLowerCase();
-      });
-      if (!matched) return { name: email, subtext: '' };
-      var fullName = userDomain.getUserFullName(matched);
-      return fullName.toLowerCase() === email.toLowerCase()
-        ? { name: email, subtext: '' }
-        : { name: fullName, subtext: email };
-    }
-
-    function createSummaryItem(labelText, valueText, subText) {
-      var item = document.createElement('div');
-      item.className = 'trip-summary-item';
-
-      var label = document.createElement('span');
-      label.className = 'trip-summary-label';
-      label.textContent = labelText;
-      item.appendChild(label);
-
-      var value = document.createElement('span');
-      value.className = 'trip-summary-value';
-      value.textContent = valueText;
-      item.appendChild(value);
-
-      if (subText) {
-        var sub = document.createElement('span');
-        sub.className = 'trip-summary-sub';
-        sub.textContent = subText;
-        item.appendChild(sub);
-      }
-      return item;
-    }
-
-    function buildTripSummaryGrid(details) {
-      var grid = document.createElement('div');
-      grid.className = 'trip-summary-grid';
-
-      var requester = resolveRequester(details.createdBy);
-      var schedule = fmt.getScheduleSummary(details.startUtc, details.endUtc);
-      var timeSub = schedule.durationText ? 'Duration: ' + schedule.durationText : '';
-
-      grid.appendChild(createSummaryItem('Requester', requester.name, requester.subtext));
-      grid.appendChild(createSummaryItem('Date', schedule.dateText));
-      grid.appendChild(createSummaryItem('Time & duration', schedule.timeText, timeSub));
-      grid.appendChild(createSummaryItem('Submitted', fmt.formatSubmittedAt(details.createdAtUtc)));
-      return grid;
-    }
-
     function buildCard(record) {
       var details = record.details || {};
       var status = domain.normalizeStatus(details.status);
@@ -111,22 +60,32 @@
 
       top.appendChild(info);
 
-      if (status === 'pending') {
+      if (status === 'pending' || domain.canAdminCancel(details, state.isAdministrator)) {
         var actions = document.createElement('div');
         actions.className = 'booking-actions';
-        var reviewBtn = document.createElement('button');
-        reviewBtn.type = 'button';
+        var actionBtn = document.createElement('button');
+        actionBtn.type = 'button';
         var isOpen = String(reviewingRecordId) === String(record.id);
-        reviewBtn.className = isOpen ? 'secondary' : '';
-        reviewBtn.textContent = isOpen ? 'Close review' : 'Review';
-        reviewBtn.setAttribute('data-toggle-review', record.id);
-        reviewBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        actions.appendChild(reviewBtn);
+        if (status === 'pending') {
+          actionBtn.className = isOpen ? 'secondary' : '';
+          actionBtn.textContent = isOpen ? 'Close review' : 'Review';
+        } else {
+          actionBtn.className = isOpen ? 'secondary' : 'fm-btn-reject';
+          actionBtn.textContent = isOpen ? 'Close' : 'Cancel booking';
+        }
+        actionBtn.setAttribute('data-toggle-review', record.id);
+        actionBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        actions.appendChild(actionBtn);
         top.appendChild(actions);
       }
 
       card.appendChild(top);
-      card.appendChild(buildTripSummaryGrid(details));
+      card.appendChild(reviewFormBuilder.buildTripSummaryGrid({
+        details: details,
+        users: state.users,
+        userDomain: userDomain,
+        formatters: fmt
+      }));
 
       if (status === 'approved' || status === 'confirmed') {
         var assignmentMeta = document.createElement('p');
@@ -141,6 +100,12 @@
         rejectedMeta.textContent = 'Rejected by: ' + details.reviewedBy +
           (details.reviewedAtUtc ? ' on ' + fmt.formatDate(details.reviewedAtUtc) : '');
         card.appendChild(rejectedMeta);
+      } else if (status === 'cancelled' && details.cancelledBy) {
+        var cancelledMeta = document.createElement('p');
+        cancelledMeta.className = 'booking-meta';
+        cancelledMeta.textContent = 'Cancelled by: ' + details.cancelledBy +
+          (details.cancelledAtUtc ? ' on ' + fmt.formatDate(details.cancelledAtUtc) : '');
+        card.appendChild(cancelledMeta);
       }
 
       if (details.approvalNotes) {
@@ -152,22 +117,36 @@
         card.appendChild(notes);
       }
 
-      if (status === 'pending' && String(reviewingRecordId) === String(record.id)) {
-        var conflicts = domain.getConflictingResources(
-          state.bookings,
-          details.startUtc,
-          details.endUtc,
-          record.id
-        );
-        card.appendChild(reviewFormBuilder.build({
-          record: record,
-          conflicts: conflicts,
-          activeDevices: getActiveDevices(),
-          activeDrivers: userDomain.getActiveDrivers(state.users),
-          usersLoadState: state.usersLoadState,
-          userDomain: userDomain,
-          isSubmitting: isSubmitting
-        }));
+      if (status === 'cancelled' && details.cancellationReason) {
+        var cancelNotes = document.createElement('p');
+        cancelNotes.className = 'notes-callout notes-callout-rejected';
+        cancelNotes.textContent = 'Cancellation reason: ' + details.cancellationReason;
+        card.appendChild(cancelNotes);
+      }
+
+      if (String(reviewingRecordId) === String(record.id)) {
+        if (status === 'pending') {
+          var conflicts = domain.getConflictingResources(
+            state.bookings,
+            details.startUtc,
+            details.endUtc,
+            record.id
+          );
+          card.appendChild(reviewFormBuilder.build({
+            record: record,
+            conflicts: conflicts,
+            activeDevices: getActiveDevices(),
+            activeDrivers: userDomain.getActiveDrivers(state.users),
+            usersLoadState: state.usersLoadState,
+            userDomain: userDomain,
+            isSubmitting: isSubmitting
+          }));
+        } else if (domain.canAdminCancel(details, state.isAdministrator)) {
+          card.appendChild(reviewFormBuilder.buildCancelForm({
+            record: record,
+            isSubmitting: isSubmitting
+          }));
+        }
       }
 
       return card;
@@ -365,6 +344,58 @@
       }
     }
 
+    async function handleAdminCancelSubmit(form) {
+      if (!state.isAdministrator || isSubmitting) return;
+      var recordId = form.getAttribute('data-admin-cancel-form');
+      var inlineError = form.querySelector('.approval-inline-error');
+      var reasonInput = form.querySelector('textarea[name="cancellationReason"]');
+      var submitBtn = form.querySelector('[data-review-submit]');
+
+      inlineError.hidden = true;
+      isSubmitting = true;
+      if (submitBtn) submitBtn.disabled = true;
+
+      try {
+        var validated = domain.validateAdminCancellation({
+          cancellationReason: reasonInput ? reasonInput.value : ''
+        });
+        var freshRecords = await apiService.getBookingRecords(state.api);
+        var targetRecord = freshRecords.find(function (item) {
+          return String(item.id) === String(recordId);
+        });
+        if (!targetRecord || !domain.canAdminCancel(targetRecord.details, state.isAdministrator)) {
+          throw new Error('This booking can no longer be cancelled. Refresh the queue to see the latest status.');
+        }
+
+        var now = new Date().toISOString();
+        var updatedDetails = Object.assign({}, targetRecord.details, {
+          status: 'cancelled',
+          cancelledBy: state.currentUserName,
+          cancelledAtUtc: now,
+          cancellationReason: validated.cancellationReason,
+          updatedAtUtc: now
+        });
+
+        await apiService.updateBookingRecord(state.api, targetRecord, updatedDetails);
+        reviewingRecordId = null;
+        statusBanner.setAttribute('data-sticky', 'true');
+        var refreshed = await onDataChanged(true);
+        setBanner(
+          refreshed
+            ? 'Approved booking cancelled. The assigned vehicle and driver are now available again.'
+            : 'Booking cancelled, but the queue could not be refreshed. Reload to verify.',
+          !refreshed
+        );
+      } catch (error) {
+        inlineError.textContent = fmt.errorText(error);
+        inlineError.hidden = false;
+      } finally {
+        isSubmitting = false;
+        if (submitBtn) submitBtn.disabled = false;
+        statusBanner.removeAttribute('data-sticky');
+      }
+    }
+
     function bind() {
       statusFilter.addEventListener('change', function () {
         reviewingRecordId = null;
@@ -389,10 +420,17 @@
         }
       });
       approvalList.addEventListener('submit', function (event) {
-        var form = event.target.closest('[data-review-form]');
-        if (!form) return;
-        event.preventDefault();
-        handleReviewSubmit(form);
+        var reviewForm = event.target.closest('[data-review-form]');
+        if (reviewForm) {
+          event.preventDefault();
+          handleReviewSubmit(reviewForm);
+          return;
+        }
+        var cancelForm = event.target.closest('[data-admin-cancel-form]');
+        if (cancelForm) {
+          event.preventDefault();
+          handleAdminCancelSubmit(cancelForm);
+        }
       });
       approvalList.addEventListener('keydown', function (event) {
         if (event.key === 'Escape' && reviewingRecordId !== null) {

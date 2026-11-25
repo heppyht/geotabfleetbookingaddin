@@ -204,6 +204,21 @@
     return status === 'pending' || status === 'approved' || status === 'confirmed';
   }
 
+  function canAdminCancel(details, isAdministrator) {
+    return Boolean(isAdministrator && details && isScheduledStatus(details.status));
+  }
+
+  function validateAdminCancellation(input) {
+    input = input || {};
+    var reason = String(input.cancellationReason || '').trim();
+    if (!reason) {
+      throw new Error('Cancellation reason is required.');
+    }
+    return {
+      cancellationReason: reason
+    };
+  }
+
   function getTimeRangeBounds(preset, nowDate) {
     var now = nowDate instanceof Date ? new Date(nowDate.getTime()) : new Date();
     var key = String(preset || 'this_week').trim().toLowerCase();
@@ -306,6 +321,7 @@
   }
 
   return {
+    canAdminCancel: canAdminCancel,
     canRequesterCancel: canRequesterCancel,
     canRequesterEdit: canRequesterEdit,
     filterApprovalQueue: filterApprovalQueue,
@@ -323,6 +339,7 @@
     normalizeStatus: normalizeStatus,
     toLocalDateTimeInput: toLocalDateTimeInput,
     toUtcInterval: toUtcInterval,
+    validateAdminCancellation: validateAdminCancellation,
     validateApprovalDecision: validateApprovalDecision,
     validateBookingInput: validateBookingInput
   };
