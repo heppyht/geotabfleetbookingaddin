@@ -4,7 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Fleet Management | Vehicle Booking</title>
-  <link rel="stylesheet" href="booking.css">
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/pages.css">
 </head>
 <body>
   <main class="booking-app">
@@ -13,7 +15,7 @@
       <div>
         <p class="eyebrow">FLEET MANAGEMENT</p>
         <h1>Fleet Management</h1>
-        <p class="hero-copy">Manage vehicle bookings and fleet information in one place.</p>
+        <p class="hero-copy">Submit vehicle booking requests, dispatch fleet assignments, and track booking history.</p>
       </div>
     </header>
 
@@ -22,7 +24,10 @@
         <p class="eyebrow">MAIN MENU</p>
         <div class="nav-items">
           <button class="nav-item" type="button" data-page="booking" aria-current="page">Booking</button>
-          <button class="nav-item" type="button" data-page="approval">Approval</button>
+          <button class="nav-item" type="button" data-page="approval" hidden>
+            <span>Approval</span>
+            <span id="approvalPendingBadge" class="nav-badge" hidden>0</span>
+          </button>
           <button class="nav-item" type="button" data-page="users">Users</button>
           <button class="nav-item" type="button" data-page="reports">Reports</button>
           <button class="nav-item" type="button" data-page="vehicles">Vehicles</button>
@@ -35,7 +40,7 @@
             <div>
               <p class="eyebrow">OPERATIONS</p>
               <h2 id="bookingPageTitle">Vehicle bookings</h2>
-              <p class="page-description">Create bookings and track operational vehicle schedules.</p>
+              <p class="page-description">Submit booking requests with your travel schedule, purpose, and destination. An Administrator will assign a vehicle and driver during approval.</p>
             </div>
           </div>
 
@@ -45,31 +50,29 @@
             <section class="panel" aria-labelledby="formTitle">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">NEW BOOKING</p>
+                  <p class="eyebrow">NEW REQUEST</p>
                   <h3 id="formTitle">Create booking</h3>
                 </div>
               </div>
               <form id="bookingForm" class="booking-form">
-                <div class="field field-wide">
-                  <label for="deviceId">Vehicle</label>
-                  <select id="deviceId" name="deviceId" required disabled>
-                    <option value="">Loading vehicles...</option>
-                  </select>
-                </div>
                 <div class="field">
-                  <label for="startLocal">Start</label>
+                  <label for="startLocal">Start <span class="required-mark" aria-hidden="true">*</span></label>
                   <input id="startLocal" name="startLocal" type="datetime-local" required disabled>
                 </div>
                 <div class="field">
-                  <label for="endLocal">End</label>
+                  <label for="endLocal">End <span class="required-mark" aria-hidden="true">*</span></label>
                   <input id="endLocal" name="endLocal" type="datetime-local" required disabled>
                 </div>
                 <div class="field field-wide">
-                  <label for="purpose">Purpose <span class="optional">(optional)</span></label>
-                  <input id="purpose" name="purpose" type="text" maxlength="160" placeholder="e.g. customer visit" disabled>
+                  <label for="destination">Destination <span class="required-mark" aria-hidden="true">*</span></label>
+                  <input id="destination" name="destination" type="text" maxlength="160" placeholder="e.g. Cikarang Industrial Area" required disabled>
+                </div>
+                <div class="field field-wide">
+                  <label for="purpose">Purpose <span class="required-mark" aria-hidden="true">*</span></label>
+                  <input id="purpose" name="purpose" type="text" maxlength="160" placeholder="e.g. Customer site visit" required disabled>
                 </div>
                 <div class="field-wide form-actions">
-                  <button id="submitButton" type="submit" disabled>Create booking</button>
+                  <button id="submitButton" type="submit" disabled>Submit request</button>
                   <button id="cancelEditButton" class="secondary" type="button" hidden>Cancel changes</button>
                 </div>
               </form>
@@ -78,10 +81,22 @@
             <section class="panel bookings-panel" aria-labelledby="bookingsTitle">
               <div class="section-heading">
                 <div>
-                  <p class="eyebrow">SCHEDULE</p>
-                  <h3 id="bookingsTitle">Booking list</h3>
+                  <p class="eyebrow">MY SCHEDULE</p>
+                  <h3 id="bookingsTitle">My bookings</h3>
+                </div>
+                <div class="schedule-controls">
+                  <div class="field schedule-filter-field">
+                    <label for="bookingRangeFilter">Time range</label>
+                    <select id="bookingRangeFilter" name="bookingRangeFilter">
+                      <option value="this_week" selected>This week</option>
+                      <option value="upcoming">Upcoming</option>
+                      <option value="this_month">This month</option>
+                      <option value="all">All time</option>
+                    </select>
+                  </div>
                 </div>
               </div>
+              <p id="bookingListSummary" class="schedule-summary" aria-live="polite"></p>
               <div id="bookingList" class="booking-list">
                 <p class="empty">Bookings will appear here after the data loads.</p>
               </div>
@@ -89,27 +104,53 @@
           </div>
 
           <aside class="notice">
-            <strong>Conflict notice:</strong> conflicts are checked before saving, but the check is not atomic. Two users may still book the same time slot concurrently.
+            <strong>Workflow notice:</strong> New requests start as <strong>Pending</strong> until reviewed by an Administrator. Approved bookings cannot be edited; cancel the booking and submit a new request if schedule changes are needed.
           </aside>
         </section>
 
         <section id="page-approval" class="page-view" aria-labelledby="approvalPageTitle" hidden>
           <div class="page-heading">
             <div>
-              <p class="eyebrow">REVIEW</p>
-              <h2 id="approvalPageTitle">Approval</h2>
-              <p class="page-description">A place to review bookings that may require attention.</p>
+              <p class="eyebrow">DISPATCH &amp; REVIEW</p>
+              <h2 id="approvalPageTitle">Approval queue</h2>
+              <p class="page-description">Review pending booking requests, assign an active vehicle and driver, or reject with a reason.</p>
             </div>
           </div>
-          <div class="panel">
-            <div class="section-heading">
+
+          <div id="approvalRestrictedNotice" class="panel" hidden>
+            <p class="empty">Access restricted. Only users with Administrator security clearance can review or approve bookings.</p>
+          </div>
+
+          <section id="approvalWorkspace" class="panel" aria-labelledby="approvalQueueTitle" hidden>
+            <div class="approval-toolbar">
               <div>
                 <p class="eyebrow">REVIEW QUEUE</p>
-                <h3>Bookings to review</h3>
+                <h3 id="approvalQueueTitle">Booking requests</h3>
+              </div>
+              <div class="approval-filter-bar">
+                <div class="field">
+                  <label for="approvalStatusFilter">Status</label>
+                  <select id="approvalStatusFilter" name="approvalStatusFilter">
+                    <option value="pending" selected>Pending</option>
+                    <option value="approved">Approved</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="cancelled">Cancelled</option>
+                    <option value="all">All statuses</option>
+                  </select>
+                </div>
+                <button id="refreshApprovalButton" class="secondary" type="button">Refresh queue</button>
               </div>
             </div>
-            <p class="empty">This is a visual placeholder. No approval workflow has been implemented.</p>
-          </div>
+
+            <div id="approvalStatusBanner" class="status" role="status" aria-live="polite">Loading approval queue...</div>
+            <div id="approvalList" class="approval-list">
+              <p class="empty">Loading booking requests...</p>
+            </div>
+          </section>
+
+          <aside class="notice">
+            <strong>Conflict notice:</strong> Vehicle and driver availability is checked before saving an approval, but MyGeotab AddInData updates are not atomic. Concurrent approvals by multiple Administrators are verified after saving.
+          </aside>
         </section>
 
         <section id="page-users" class="page-view" aria-labelledby="usersPageTitle" hidden>
@@ -117,7 +158,7 @@
             <div>
               <p class="eyebrow">ACCESS</p>
               <h2 id="usersPageTitle">Users</h2>
-              <p class="page-description">Browse user accounts and MyGeotab security clearances available from the current database.</p>
+              <p class="page-description">Browse user accounts, driver statuses, and MyGeotab security clearances available from the current database.</p>
             </div>
           </div>
           <section class="panel" aria-labelledby="usersTableTitle">
@@ -165,7 +206,7 @@
                 </tbody>
               </table>
             </div>
-            <p class="table-note">Functional role is optional. Clearance is resolved from the names of the security groups assigned to each user. Custom or unavailable groups are marked separately; clearance does not assign booking approval permissions.</p>
+            <p class="table-note">Administrator security clearance authorizes access to the Approval page. Active users marked as Driver are eligible for driver assignment during approval.</p>
             <p class="table-note">Account status is derived from each user's active-from and active-to dates. It does not guarantee that the user can authenticate successfully.</p>
           </section>
         </section>
@@ -175,7 +216,7 @@
             <div>
               <p class="eyebrow">ANALYTICS</p>
               <h2 id="reportsPageTitle">Reports</h2>
-              <p class="page-description">Insights into booking activity and fleet usage.</p>
+              <p class="page-description">Insights into booking requests, approvals, driver assignments, and fleet usage.</p>
             </div>
           </div>
 
@@ -206,8 +247,11 @@
                 <label for="reportStatus">Status</label>
                 <select id="reportStatus" name="status">
                   <option value="all">All statuses</option>
-                  <option value="confirmed">Confirmed</option>
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
                   <option value="cancelled">Cancelled</option>
+                  <option value="confirmed">Confirmed (Legacy)</option>
                   <option value="unknown">Unknown</option>
                 </select>
               </div>
@@ -230,14 +274,19 @@
               <p class="report-note">Matching the selected filters</p>
             </article>
             <article class="panel report-card">
-              <p class="eyebrow">VEHICLES USED</p>
-              <p id="reportVehiclesUsed" class="report-value">0</p>
-              <p class="report-note">In the matching booking history</p>
+              <p class="eyebrow">PENDING APPROVAL</p>
+              <p id="reportPendingBookings" class="report-value">0</p>
+              <p class="report-note">Awaiting administrator review</p>
             </article>
             <article class="panel report-card">
-              <p class="eyebrow">CANCELLED BOOKINGS</p>
-              <p id="reportCancelledBookings" class="report-value">0</p>
-              <p class="report-note">Matching the selected filters</p>
+              <p class="eyebrow">APPROVED</p>
+              <p id="reportApprovedBookings" class="report-value">0</p>
+              <p class="report-note">Approved and legacy confirmed</p>
+            </article>
+            <article class="panel report-card">
+              <p class="eyebrow">VEHICLES USED</p>
+              <p id="reportVehiclesUsed" class="report-value">0</p>
+              <p class="report-note">Distinct assigned vehicles</p>
             </article>
           </div>
 
@@ -254,16 +303,19 @@
                 <thead>
                   <tr>
                     <th scope="col">Vehicle</th>
+                    <th scope="col">Driver</th>
                     <th scope="col">Booked by</th>
+                    <th scope="col">Destination</th>
                     <th scope="col">Purpose</th>
                     <th scope="col">Start</th>
                     <th scope="col">End</th>
                     <th scope="col">Status</th>
+                    <th scope="col">Notes</th>
                   </tr>
                 </thead>
                 <tbody id="reportHistoryBody">
                   <tr>
-                    <td colspan="6"><p class="empty table-empty">Booking history will appear after the data loads.</p></td>
+                    <td colspan="9"><p class="empty table-empty">Booking history will appear after the data loads.</p></td>
                   </tr>
                 </tbody>
               </table>
@@ -293,7 +345,7 @@
                 <h3 id="vehicleSetupTitle">Vehicle list and IDs</h3>
               </div>
             </div>
-            <p class="page-description">This list follows the account's access permissions. Active vehicles can be booked; inactive vehicles are shown for reference.</p>
+            <p class="page-description">This list follows the account's access permissions. Active vehicles can be assigned during approval; inactive vehicles are shown for reference.</p>
             <ul id="vehicleInventory" class="vehicle-inventory">
               <li>Loading vehicles...</li>
             </ul>
@@ -303,889 +355,16 @@
     </div>
   </main>
 
-  <script src="booking-domain.js"></script>
-  <script>
-    (function () {
-      'use strict';
-
-      var ADDIN_ID = 'azg3NWI4YTUtNDczZS00NzF';
-
-      var domain = window.VehicleBookingDomain;
-      var form = document.getElementById('bookingForm');
-      var deviceSelect = document.getElementById('deviceId');
-      var startInput = document.getElementById('startLocal');
-      var endInput = document.getElementById('endLocal');
-      var purposeInput = document.getElementById('purpose');
-      var submitButton = document.getElementById('submitButton');
-      var cancelEditButton = document.getElementById('cancelEditButton');
-      var statusElement = document.getElementById('status');
-      var bookingList = document.getElementById('bookingList');
-      var vehicleInventory = document.getElementById('vehicleInventory');
-      var navigation = document.querySelector('.side-nav');
-      var reportFilterForm = document.getElementById('reportFilterForm');
-      var reportStartDate = document.getElementById('reportStartDate');
-      var reportEndDate = document.getElementById('reportEndDate');
-      var reportVehicle = document.getElementById('reportVehicle');
-      var reportStatus = document.getElementById('reportStatus');
-      var reportRequester = document.getElementById('reportRequester');
-      var reportFilterMessage = document.getElementById('reportFilterMessage');
-      var reportHistoryBody = document.getElementById('reportHistoryBody');
-      var reportResultSummary = document.getElementById('reportResultSummary');
-      var reportPageSummary = document.getElementById('reportPageSummary');
-      var reportPreviousPage = document.getElementById('reportPreviousPage');
-      var reportNextPage = document.getElementById('reportNextPage');
-      var userDataStatus = document.getElementById('userDataStatus');
-      var refreshUsersButton = document.getElementById('refreshUsersButton');
-      var userSearch = document.getElementById('userSearch');
-      var userStatusFilter = document.getElementById('userStatusFilter');
-      var userListBody = document.getElementById('userListBody');
-      var reportPage = 0;
-      var reportPageSize = 25;
-      var appliedReportFilters = {
-        fromDate: '',
-        toDate: '',
-        deviceId: '',
-        status: 'all',
-        requester: ''
-      };
-      var currentApi = null;
-      var currentUserName = '';
-      var currentDevices = [];
-      var currentBookings = [];
-      var currentUsers = [];
-      var securityGroupNames = {};
-      var securityGroupsLoaded = false;
-      var usersLoadState = 'idle';
-      var usersLoadSequence = 0;
-      var activePage = 'booking';
-      var canBook = false;
-      var isBusy = false;
-      var editingRecordId = null;
-      var loadSequence = 0;
-      var listenersBound = false;
-
-      function apiCall(api, method, parameters) {
-        return new Promise(function (resolve, reject) {
-          api.call(method, parameters, resolve, reject);
-        });
-      }
-
-      function getSession(api) {
-        return new Promise(function (resolve, reject) {
-          try {
-            api.getSession(resolve);
-          } catch (error) {
-            reject(error);
-          }
-        });
-      }
-
-      function errorText(error) {
-        if (error && error.message) return error.message;
-        if (typeof error === 'string') return error;
-        try {
-          return JSON.stringify(error);
-        } catch (serializationError) {
-          return String(error);
-        }
-      }
-
-      function setStatus(message, isError) {
-        statusElement.textContent = message;
-        statusElement.setAttribute('data-error', isError ? 'true' : 'false');
-      }
-
-      function formatLocalInput(date) {
-        function pad(value) { return String(value).padStart(2, '0'); }
-        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' +
-          pad(date.getDate()) + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
-      }
-
-      function setDefaultTimes() {
-        var start = new Date();
-        start.setMinutes(Math.ceil((start.getMinutes() + 1) / 30) * 30, 0, 0);
-        var end = new Date(start.getTime() + 60 * 60 * 1000);
-        startInput.value = formatLocalInput(start);
-        endInput.value = formatLocalInput(end);
-      }
-
-      function setBusy(value) {
-        isBusy = value;
-        updateFormState();
-      }
-
-      function updateFormState() {
-        var formEnabled = canBook && !isBusy;
-        deviceSelect.disabled = !formEnabled;
-        startInput.disabled = !formEnabled;
-        endInput.disabled = !formEnabled;
-        purposeInput.disabled = !formEnabled;
-        submitButton.disabled = !formEnabled;
-        cancelEditButton.disabled = isBusy;
-      }
-
-      function isDeviceActive(device) {
-        if (!device.activeTo) return true;
-        var activeTo = new Date(device.activeTo).getTime();
-        return Number.isFinite(activeTo) && activeTo > Date.now();
-      }
-
-      function renderDeviceInventory(devices) {
-        vehicleInventory.textContent = '';
-        if (devices.length === 0) {
-          var empty = document.createElement('li');
-          empty.textContent = 'No vehicles are available to this account.';
-          vehicleInventory.appendChild(empty);
-          return;
-        }
-
-        devices.forEach(function (device) {
-          var item = document.createElement('li');
-          item.textContent = (device.name || 'Unnamed vehicle') + ' — ' + device.id +
-            (isDeviceActive(device) ? ' (Active)' : ' (Inactive)');
-          vehicleInventory.appendChild(item);
-        });
-      }
-
-      function renderDeviceOptions(devices) {
-        var availableDevices = devices.filter(isDeviceActive);
-
-        deviceSelect.textContent = '';
-        var placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = availableDevices.length ? 'Select a vehicle' : 'No active vehicles';
-        deviceSelect.appendChild(placeholder);
-
-        devices.forEach(function (device) {
-          var option = document.createElement('option');
-          option.value = device.id;
-          option.textContent = (device.name || 'Unnamed vehicle') + ' — ' + device.id +
-            (isDeviceActive(device) ? '' : ' (Inactive)');
-          option.disabled = !isDeviceActive(device);
-          deviceSelect.appendChild(option);
-        });
-
-        return {
-          availableCount: availableDevices.length
-        };
-      }
-
-      function getBookingRecords(api) {
-        return apiCall(api, 'Get', {
-          typeName: 'AddInData',
-          search: { addinId: ADDIN_ID }
-        });
-      }
-
-      function normalizeRecords(records) {
-        return records.map(function (record) {
-          var details = record.details;
-          if (typeof details === 'string') {
-            try {
-              details = JSON.parse(details);
-            } catch (error) {
-              throw new Error('Unable to read AddInData booking data for record ' + record.id + '.');
-            }
-          }
-          if (!details || typeof details !== 'object') {
-            throw new Error('AddInData record ' + record.id + ' has invalid details.');
-          }
-          return {
-            id: record.id,
-            groups: record.groups || [],
-            details: details
-          };
-        });
-      }
-
-      function formatDate(value) {
-        var date = new Date(value);
-        return Number.isNaN(date.getTime()) ? 'Invalid time' : date.toLocaleString('en-US');
-      }
-
-      function getReportStatus(details) {
-        if (details.status === 'confirmed') return 'Confirmed';
-        if (details.status === 'cancelled') return 'Cancelled';
-        return 'Unknown';
-      }
-
-      function getReportVehicleKey(details) {
-        return String(details.deviceId || details.deviceName || '');
-      }
-
-      function renderReportVehicleOptions() {
-        var selectedValue = reportVehicle.value;
-        var vehicles = [];
-
-        function addVehicle(id, name) {
-          if (!id) return;
-          var key = String(id);
-          var existing = vehicles.find(function (vehicle) { return vehicle.id === key; });
-          if (existing) {
-            if (!existing.name && name) existing.name = name;
-            return;
-          }
-          vehicles.push({ id: key, name: String(name || key) });
-        }
-
-        currentDevices.forEach(function (device) {
-          addVehicle(device.id, device.name);
-        });
-        currentBookings.forEach(function (record) {
-          addVehicle(getReportVehicleKey(record.details), record.details.deviceName);
-        });
-        vehicles.sort(function (first, second) {
-          return first.name.localeCompare(second.name);
-        });
-
-        reportVehicle.textContent = '';
-        var allOption = document.createElement('option');
-        allOption.value = '';
-        allOption.textContent = 'All vehicles';
-        reportVehicle.appendChild(allOption);
-        vehicles.forEach(function (vehicle) {
-          var option = document.createElement('option');
-          option.value = vehicle.id;
-          option.textContent = vehicle.name;
-          reportVehicle.appendChild(option);
-        });
-        reportVehicle.value = vehicles.some(function (vehicle) {
-          return vehicle.id === selectedValue;
-        }) ? selectedValue : '';
-      }
-
-      function renderReports() {
-        var filteredBookings = domain.filterBookings(currentBookings, appliedReportFilters);
-        filteredBookings.sort(function (first, second) {
-          var firstStart = Date.parse(first.details.startUtc);
-          var secondStart = Date.parse(second.details.startUtc);
-          if (!Number.isFinite(firstStart)) firstStart = Number.NEGATIVE_INFINITY;
-          if (!Number.isFinite(secondStart)) secondStart = Number.NEGATIVE_INFINITY;
-          return secondStart - firstStart;
-        });
-
-        var vehicleKeys = [];
-        var cancelledCount = 0;
-        filteredBookings.forEach(function (record) {
-          var details = record.details;
-          var vehicleKey = getReportVehicleKey(details);
-          if (vehicleKey && vehicleKeys.indexOf(vehicleKey) === -1) vehicleKeys.push(vehicleKey);
-          if (details.status === 'cancelled') cancelledCount += 1;
-        });
-        document.getElementById('reportTotalBookings').textContent = String(filteredBookings.length);
-        document.getElementById('reportVehiclesUsed').textContent = String(vehicleKeys.length);
-        document.getElementById('reportCancelledBookings').textContent = String(cancelledCount);
-
-        reportHistoryBody.textContent = '';
-        if (filteredBookings.length === 0) {
-          var emptyRow = document.createElement('tr');
-          var emptyCell = document.createElement('td');
-          emptyCell.colSpan = 6;
-          var emptyMessage = document.createElement('p');
-          emptyMessage.className = 'empty table-empty';
-          emptyMessage.textContent = currentBookings.length
-            ? 'No bookings match the selected filters.'
-            : 'No booking history is available.';
-          emptyCell.appendChild(emptyMessage);
-          emptyRow.appendChild(emptyCell);
-          reportHistoryBody.appendChild(emptyRow);
-          reportResultSummary.textContent = '0 bookings';
-          reportPageSummary.textContent = 'Showing 0 bookings';
-          reportPreviousPage.disabled = true;
-          reportNextPage.disabled = true;
-          return;
-        }
-
-        var pageCount = Math.ceil(filteredBookings.length / reportPageSize);
-        reportPage = Math.min(reportPage, pageCount - 1);
-        var pageStart = reportPage * reportPageSize;
-        var pageEnd = Math.min(pageStart + reportPageSize, filteredBookings.length);
-        filteredBookings.slice(pageStart, pageEnd).forEach(function (record) {
-          var details = record.details;
-          var device = currentDevices.find(function (item) {
-            return item.id === details.deviceId;
-          });
-          var row = document.createElement('tr');
-          var cells = [
-            device ? device.name || device.id : details.deviceName || details.deviceId || 'Unknown vehicle',
-            details.createdBy || 'Unknown',
-            details.purpose || '—',
-            formatDate(details.startUtc),
-            formatDate(details.endUtc)
-          ];
-          cells.forEach(function (value) {
-            var cell = document.createElement('td');
-            cell.textContent = value;
-            row.appendChild(cell);
-          });
-          var statusCell = document.createElement('td');
-          var statusBadge = document.createElement('span');
-          var status = getReportStatus(details);
-          statusBadge.className = 'booking-status booking-status-' + status.toLowerCase();
-          statusBadge.textContent = status;
-          statusCell.appendChild(statusBadge);
-          row.appendChild(statusCell);
-          reportHistoryBody.appendChild(row);
-        });
-
-        reportResultSummary.textContent = filteredBookings.length +
-          (filteredBookings.length === 1 ? ' booking' : ' bookings');
-        reportPageSummary.textContent = 'Showing ' + (pageStart + 1) + '-' + pageEnd +
-          ' of ' + filteredBookings.length + ' bookings';
-        reportPreviousPage.disabled = reportPage === 0;
-        reportNextPage.disabled = reportPage >= pageCount - 1;
-      }
-
-      function applyReportFilters(event) {
-        event.preventDefault();
-        if (reportStartDate.value && reportEndDate.value &&
-            reportStartDate.value > reportEndDate.value) {
-          reportFilterMessage.textContent = 'End date must be on or after start date.';
-          reportFilterMessage.hidden = false;
-          return;
-        }
-        reportFilterMessage.textContent = '';
-        reportFilterMessage.hidden = true;
-        appliedReportFilters = {
-          fromDate: reportStartDate.value,
-          toDate: reportEndDate.value,
-          deviceId: reportVehicle.value,
-          status: reportStatus.value,
-          requester: reportRequester.value
-        };
-        reportPage = 0;
-        renderReports();
-      }
-
-      function resetReportFilters() {
-        reportFilterForm.reset();
-        reportFilterMessage.textContent = '';
-        reportFilterMessage.hidden = true;
-        appliedReportFilters = {
-          fromDate: '',
-          toDate: '',
-          deviceId: '',
-          status: 'all',
-          requester: ''
-        };
-        reportPage = 0;
-        renderReports();
-      }
-
-      function getUserFullName(user) {
-        var fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
-        return fullName || user.login || 'Unnamed user';
-      }
-
-      function getUserRoleLabel(user) {
-        var role = user.userRole;
-        if (!role) return 'Not assigned';
-        var roleLabel = typeof role === 'string' || typeof role === 'number'
-          ? String(role)
-          : String(role.name || role.id || 'Not assigned');
-        roleLabel = roleLabel.trim();
-        if (roleLabel.toLowerCase() === 'other' && user.customUserRole) {
-          return 'Other: ' + user.customUserRole.trim();
-        }
-        return roleLabel;
-      }
-
-      function getUserDriverLabel(user) {
-        return user.isDriver ? 'Driver' : 'Not a driver';
-      }
-
-      function getUserClearanceLabel(user) {
-        var builtInClearanceNames = {
-          everythingsecurity: 'Administrator',
-          supervisorsecurity: 'Supervisor',
-          defaultsecurity: 'Default user',
-          driveusersecurity: 'Drive App user',
-          viewonlysecurity: 'View only',
-          nothingsecurity: 'Nothing'
-        };
-        var groups = Array.isArray(user.securityGroups) ? user.securityGroups : [];
-        var names = groups.map(function (group) {
-          var id = typeof group === 'string' ? group : group && group.id;
-          var name = id ? securityGroupNames[id] || '' : '';
-          var normalizedName = name.toLowerCase().replace(/[^a-z]/g, '');
-          return builtInClearanceNames[normalizedName] || name;
-        }).filter(Boolean);
-        if (names.length) return names.join(', ');
-        return groups.length && securityGroupsLoaded ? 'Unmapped clearance' : 'Not available';
-      }
-
-      function getUserStatus(user) {
-        var activeFrom = Date.parse(user.activeFrom);
-        var activeTo = Date.parse(user.activeTo);
-        if (!Number.isFinite(activeFrom) || !Number.isFinite(activeTo)) return 'Unknown';
-        if (Date.now() < activeFrom) return 'Scheduled';
-        if (Date.now() > activeTo) return 'Inactive';
-        return 'Active';
-      }
-
-      function getUserEmptyRow(message) {
-        var row = document.createElement('tr');
-        var cell = document.createElement('td');
-        cell.colSpan = 6;
-        var empty = document.createElement('p');
-        empty.className = 'empty table-empty';
-        empty.textContent = message;
-        cell.appendChild(empty);
-        row.appendChild(cell);
-        return row;
-      }
-
-      function renderUsers() {
-        userListBody.textContent = '';
-        if (usersLoadState === 'idle' || usersLoadState === 'loading') {
-          userListBody.appendChild(getUserEmptyRow(
-            usersLoadState === 'loading' ? 'Loading users...' : 'Select the Users tab to load user records.'
-          ));
-          return;
-        }
-        if (usersLoadState === 'error') {
-          userListBody.appendChild(getUserEmptyRow('The user list could not be loaded.'));
-          return;
-        }
-
-        var search = userSearch.value.trim().toLowerCase();
-        var statusFilter = userStatusFilter.value;
-        var users = currentUsers.filter(function (user) {
-          var searchable = [
-            getUserFullName(user),
-            user.login,
-            getUserRoleLabel(user),
-            user.customUserRole,
-            getUserClearanceLabel(user),
-            user.isDriver ? 'Driver' : ''
-          ].join(' ').toLowerCase();
-          return (!search || searchable.indexOf(search) !== -1) &&
-            (statusFilter === 'all' || getUserStatus(user).toLowerCase() === statusFilter);
-        }).sort(function (first, second) {
-          return getUserFullName(first).localeCompare(getUserFullName(second));
-        });
-
-        if (users.length === 0) {
-          userListBody.appendChild(getUserEmptyRow(
-            currentUsers.length ? 'No users match the selected filters.' : 'No user records are visible to this account.'
-          ));
-          return;
-        }
-
-        users.forEach(function (user) {
-          var row = document.createElement('tr');
-          [
-            getUserFullName(user),
-            user.login || '—',
-            getUserRoleLabel(user),
-            getUserClearanceLabel(user),
-            getUserDriverLabel(user)
-          ].forEach(function (value) {
-            var cell = document.createElement('td');
-            cell.textContent = value;
-            row.appendChild(cell);
-          });
-          var statusCell = document.createElement('td');
-          var status = getUserStatus(user);
-          var statusBadge = document.createElement('span');
-          statusBadge.className = 'user-status user-status-' + status.toLowerCase();
-          statusBadge.textContent = status;
-          statusCell.appendChild(statusBadge);
-          row.appendChild(statusCell);
-          userListBody.appendChild(row);
-        });
-      }
-
-      async function loadUsers(api, force) {
-        if (!api || usersLoadState === 'loading' || (usersLoadState === 'loaded' && !force)) return;
-        var sequence = ++usersLoadSequence;
-        usersLoadState = 'loading';
-        currentUsers = [];
-        securityGroupNames = {};
-        securityGroupsLoaded = false;
-        refreshUsersButton.disabled = true;
-        userDataStatus.textContent = 'Loading users from the current database...';
-        userDataStatus.setAttribute('data-error', 'false');
-        renderUsers();
-
-        try {
-          var results = await Promise.all([
-            apiCall(api, 'Get', { typeName: 'User' }),
-            apiCall(api, 'Get', {
-              typeName: 'Group',
-              search: { id: 'GroupSecurityId' }
-            }).catch(function () { return null; })
-          ]);
-          if (sequence !== usersLoadSequence) return;
-          securityGroupNames = {};
-          securityGroupsLoaded = Array.isArray(results[1]);
-          if (securityGroupsLoaded) {
-            results[1].forEach(function (group) {
-              if (group && group.id && group.name) securityGroupNames[group.id] = String(group.name);
-            });
-          }
-          currentUsers = results[0].filter(function (user) {
-            return user && user.id;
-          }).map(function (user) {
-            return {
-              id: user.id,
-              login: String(user.name || ''),
-              firstName: String(user.firstName || ''),
-              lastName: String(user.lastName || ''),
-              userRole: user.userRole || null,
-              customUserRole: String(user.customUserRole || '').trim(),
-              securityGroups: Array.isArray(user.securityGroups) ? user.securityGroups.slice() : [],
-              activeFrom: user.activeFrom || '',
-              activeTo: user.activeTo || '',
-              isDriver: user.isDriver === true
-            };
-          });
-          usersLoadState = 'loaded';
-          userDataStatus.textContent = currentUsers.length
-            ? 'Loaded ' + currentUsers.length + ' user records visible to this account.'
-            : 'No user records are visible to this account.';
-          userDataStatus.setAttribute('data-error', 'false');
-          renderUsers();
-        } catch (error) {
-          if (sequence === usersLoadSequence) {
-            currentUsers = [];
-            usersLoadState = 'error';
-            userDataStatus.textContent = 'Unable to load users. Check User read access for this account. Details: ' + errorText(error);
-            userDataStatus.setAttribute('data-error', 'true');
-            renderUsers();
-          }
-        } finally {
-          if (sequence === usersLoadSequence) refreshUsersButton.disabled = false;
-        }
-      }
-
-      function renderBookings() {
-        bookingList.textContent = '';
-        var sortedBookings = currentBookings.slice().sort(function (first, second) {
-          return new Date(first.details.startUtc).getTime() - new Date(second.details.startUtc).getTime();
-        });
-
-        if (sortedBookings.length === 0) {
-          var empty = document.createElement('p');
-          empty.className = 'empty';
-          empty.textContent = 'No bookings yet.';
-          bookingList.appendChild(empty);
-          return;
-        }
-
-        sortedBookings.forEach(function (record) {
-          var details = record.details;
-          var device = currentDevices.find(function (item) { return item.id === details.deviceId; });
-          var card = document.createElement('article');
-          card.className = 'booking';
-
-          var content = document.createElement('div');
-          content.className = 'booking-details';
-          var title = document.createElement('p');
-          title.className = 'booking-title';
-          title.textContent = (device ? device.name : details.deviceName || details.deviceId) +
-            ' — ' + (details.status === 'cancelled' ? 'Cancelled' : 'Confirmed');
-          var metadata = document.createElement('p');
-          metadata.className = 'booking-meta';
-          metadata.textContent = formatDate(details.startUtc) + ' – ' + formatDate(details.endUtc) +
-            ' | Booked by: ' + (details.createdBy || 'Unknown') +
-            (details.purpose ? ' | Purpose: ' + details.purpose : '');
-          content.appendChild(title);
-          content.appendChild(metadata);
-          card.appendChild(content);
-
-          var actions = document.createElement('div');
-          actions.className = 'booking-actions';
-          var isOwner = currentUserName &&
-            String(details.createdBy || '').toLowerCase() === currentUserName.toLowerCase();
-          if (details.status === 'confirmed' && isOwner) {
-            var editButton = document.createElement('button');
-            editButton.type = 'button';
-            editButton.className = 'secondary';
-            editButton.textContent = 'Edit';
-            editButton.setAttribute('data-edit-id', record.id);
-            actions.appendChild(editButton);
-
-            var cancelButton = document.createElement('button');
-            cancelButton.type = 'button';
-            cancelButton.className = 'danger';
-            cancelButton.textContent = 'Cancel';
-            cancelButton.setAttribute('data-cancel-id', record.id);
-            actions.appendChild(cancelButton);
-          }
-          if (actions.childNodes.length) card.appendChild(actions);
-          bookingList.appendChild(card);
-        });
-      }
-
-      async function refresh(api, quiet) {
-        currentApi = api;
-        var sequence = ++loadSequence;
-        if (!quiet) setStatus('Loading vehicles and bookings...', false);
-
-        try {
-          var results = await Promise.all([
-            apiCall(api, 'Get', { typeName: 'Device' }),
-            getBookingRecords(api),
-            getSession(api)
-          ]);
-          if (sequence !== loadSequence) return null;
-
-          currentDevices = results[0].filter(function (device) {
-            return device && device.id;
-          });
-          currentBookings = normalizeRecords(results[1]);
-          currentUserName = results[2].userName || '';
-          renderDeviceInventory(currentDevices);
-          renderBookings();
-          renderReportVehicleOptions();
-          renderReports();
-
-          var configuration = renderDeviceOptions(currentDevices);
-          canBook = configuration.availableCount > 0;
-          updateFormState();
-
-          if (currentDevices.length === 0) {
-            setStatus('No vehicles are available. Check MyGeotab Device access permissions for this account.', true);
-          } else if (configuration.availableCount === 0) {
-            setStatus('Vehicles were found, but none are active and available for booking.', true);
-          } else if (!quiet) {
-            setStatus('Data loaded. ' + configuration.availableCount +
-              (configuration.availableCount === 1 ? ' active vehicle is' : ' active vehicles are') +
-              ' available for booking.', false);
-          }
-          return currentBookings.slice();
-        } catch (error) {
-          if (sequence === loadSequence) {
-            canBook = false;
-            updateFormState();
-            setStatus('Unable to load MyGeotab data: ' + errorText(error), true);
-          }
-          return null;
-        }
-      }
-
-      function createBookingKey() {
-        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
-        return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
-      }
-
-      function resetForm() {
-        editingRecordId = null;
-        form.reset();
-        document.getElementById('formTitle').textContent = 'Create booking';
-        submitButton.textContent = 'Create booking';
-        cancelEditButton.hidden = true;
-        setDefaultTimes();
-        updateFormState();
-      }
-
-      function getRecordById(id) {
-        return currentBookings.find(function (record) { return String(record.id) === String(id); });
-      }
-
-      function beginEdit(id) {
-        var record = getRecordById(id);
-        if (!record || record.details.status !== 'confirmed') return;
-
-        editingRecordId = record.id;
-        deviceSelect.value = record.details.deviceId;
-        startInput.value = domain.toLocalDateTimeInput(record.details.startUtc);
-        endInput.value = domain.toLocalDateTimeInput(record.details.endUtc);
-        purposeInput.value = record.details.purpose || '';
-        document.getElementById('formTitle').textContent = 'Edit booking';
-        submitButton.textContent = 'Save changes';
-        cancelEditButton.hidden = false;
-        window.scrollTo(0, 0);
-      }
-
-      async function submitBooking(event) {
-        event.preventDefault();
-        if (!canBook || isBusy) return;
-
-        setBusy(true);
-        try {
-          var interval = domain.toUtcInterval(startInput.value, endInput.value);
-          var device = currentDevices.find(function (item) { return item.id === deviceSelect.value; });
-          if (!device || !isDeviceActive(device)) throw new Error('Select a valid active vehicle.');
-
-          var freshRecords = normalizeRecords(await getBookingRecords(currentApi));
-          var recordsForConflictCheck = freshRecords.filter(function (record) {
-            return String(record.id) !== String(editingRecordId);
-          });
-          if (domain.hasConflict(recordsForConflictCheck, device.id, interval.startUtc, interval.endUtc)) {
-            throw new Error('This vehicle already has an active booking during that time.');
-          }
-
-          var existingRecord = editingRecordId ? freshRecords.find(function (record) {
-            return String(record.id) === String(editingRecordId);
-          }) : null;
-          if (editingRecordId && (!existingRecord || existingRecord.details.status !== 'confirmed')) {
-            throw new Error('Booking not found or it has changed. Reload the list and try again.');
-          }
-          if (existingRecord &&
-              String(existingRecord.details.createdBy || '').toLowerCase() !== currentUserName.toLowerCase()) {
-            throw new Error('Only the booking owner can edit this booking.');
-          }
-          var now = new Date().toISOString();
-          var details = Object.assign({}, existingRecord ? existingRecord.details : {}, {
-            bookingKey: existingRecord ? existingRecord.details.bookingKey : createBookingKey(),
-            deviceId: device.id,
-            deviceName: device.name || device.id,
-            startUtc: interval.startUtc,
-            endUtc: interval.endUtc,
-            status: 'confirmed',
-            purpose: purposeInput.value.trim(),
-            createdBy: existingRecord ? existingRecord.details.createdBy : currentUserName,
-            createdAtUtc: existingRecord ? existingRecord.details.createdAtUtc : now,
-            updatedAtUtc: now
-          });
-
-          var recordId;
-          if (existingRecord) {
-            await apiCall(currentApi, 'Set', {
-              typeName: 'AddInData',
-              entity: {
-                addInId: ADDIN_ID,
-                id: existingRecord.id,
-                groups: existingRecord.groups,
-                details: details
-              }
-            });
-            recordId = existingRecord.id;
-          } else {
-            recordId = await apiCall(currentApi, 'Add', {
-              typeName: 'AddInData',
-              entity: { addInId: ADDIN_ID, details: details }
-            });
-          }
-
-          var updatedRecords = await refresh(currentApi, true);
-          resetForm();
-          if (!updatedRecords) {
-            setStatus('Booking saved, but the list could not be refreshed. Reload the add-in to verify.', true);
-            return;
-          }
-
-          var concurrentConflict = domain.hasConflict(
-            updatedRecords.filter(function (record) { return String(record.id) !== String(recordId); }),
-            device.id,
-            interval.startUtc,
-            interval.endUtc
-          );
-          if (concurrentConflict) {
-            setStatus('Booking saved, but another booking was detected for the same time slot. Contact an administrator to resolve the conflict.', true);
-          } else {
-            setStatus(existingRecord ? 'Booking changes saved.' : 'Booking created successfully.', false);
-          }
-        } catch (error) {
-          setStatus('Unable to save booking: ' + errorText(error), true);
-        } finally {
-          setBusy(false);
-        }
-      }
-
-      async function cancelBooking(id) {
-        if (isBusy || !window.confirm('Cancel this booking?')) return;
-        setBusy(true);
-        try {
-          var freshRecords = normalizeRecords(await getBookingRecords(currentApi));
-          var record = freshRecords.find(function (item) { return String(item.id) === String(id); });
-          if (!record || record.details.status !== 'confirmed') {
-            throw new Error('Booking not found or it has already been cancelled. Reload the list and try again.');
-          }
-          if (String(record.details.createdBy || '').toLowerCase() !== currentUserName.toLowerCase()) {
-            throw new Error('Only the booking owner can cancel this booking.');
-          }
-
-          var details = Object.assign({}, record.details, {
-            status: 'cancelled',
-            cancelledAtUtc: new Date().toISOString(),
-            updatedAtUtc: new Date().toISOString()
-          });
-          await apiCall(currentApi, 'Set', {
-            typeName: 'AddInData',
-            entity: {
-              addInId: ADDIN_ID,
-              id: record.id,
-              groups: record.groups,
-              details: details
-            }
-          });
-          var refreshedRecords = await refresh(currentApi, true);
-          if (String(editingRecordId) === String(id)) resetForm();
-          if (!refreshedRecords) {
-            setStatus('Booking cancelled, but the list could not be refreshed. Reload the add-in to verify.', true);
-            return;
-          }
-          setStatus('Booking cancelled successfully.', false);
-        } catch (error) {
-          setStatus('Unable to cancel booking: ' + errorText(error), true);
-        } finally {
-          setBusy(false);
-        }
-      }
-
-      function bindListeners() {
-        if (listenersBound) return;
-        form.addEventListener('submit', submitBooking);
-        cancelEditButton.addEventListener('click', resetForm);
-        reportFilterForm.addEventListener('submit', applyReportFilters);
-        document.getElementById('resetReportFilters').addEventListener('click', resetReportFilters);
-        reportPreviousPage.addEventListener('click', function () {
-          if (reportPage === 0) return;
-          reportPage -= 1;
-          renderReports();
-        });
-        reportNextPage.addEventListener('click', function () {
-          reportPage += 1;
-          renderReports();
-        });
-        refreshUsersButton.addEventListener('click', function () {
-          loadUsers(currentApi, true);
-        });
-        userSearch.addEventListener('input', renderUsers);
-        userStatusFilter.addEventListener('change', renderUsers);
-        navigation.addEventListener('click', function (event) {
-          var button = event.target.closest('[data-page]');
-          if (!button) return;
-          var pageId = 'page-' + button.getAttribute('data-page');
-          activePage = button.getAttribute('data-page');
-          document.querySelectorAll('.page-view').forEach(function (page) {
-            page.hidden = page.id !== pageId;
-          });
-          navigation.querySelectorAll('[data-page]').forEach(function (item) {
-            if (item === button) item.setAttribute('aria-current', 'page');
-            else item.removeAttribute('aria-current');
-          });
-          if (activePage === 'users') loadUsers(currentApi, false);
-        });
-        bookingList.addEventListener('click', function (event) {
-          var editButton = event.target.closest('[data-edit-id]');
-          var cancelButton = event.target.closest('[data-cancel-id]');
-          if (editButton) beginEdit(editButton.getAttribute('data-edit-id'));
-          if (cancelButton) cancelBooking(cancelButton.getAttribute('data-cancel-id'));
-        });
-        setDefaultTimes();
-        listenersBound = true;
-      }
-
-      geotab.addin.fleetSummaryDashboard = function () {
-        return {
-          initialize: function (api, state, callback) {
-            bindListeners();
-            refresh(api, false).then(function () {
-              callback();
-            });
-          },
-          focus: function (api) {
-            refresh(api, false);
-            if (activePage === 'users') loadUsers(api, true);
-          },
-          blur: function () {}
-        };
-      };
-    })();
-  </script>
+  <script src="js/domain/user-domain.js"></script>
+  <script src="js/domain/booking-domain.js"></script>
+  <script src="js/services/geotab-api.js"></script>
+  <script src="js/ui/formatters.js"></script>
+  <script src="js/ui/vehicles-view.js"></script>
+  <script src="js/ui/users-view.js"></script>
+  <script src="js/ui/reports-view.js"></script>
+  <script src="js/ui/booking-view.js"></script>
+  <script src="js/ui/approval-review-form.js"></script>
+  <script src="js/ui/approval-view.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

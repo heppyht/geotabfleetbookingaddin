@@ -1,149 +1,241 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const domain = require('../booking-domain');
+const domain = require('../js/domain/booking-domain');
 
-test('allows bookings that start when an existing booking ends', () => {
-  const bookings = [{
-    details: {
-      deviceId: 'vehicle-1',
-      status: 'confirmed',
-      startUtc: '2026-11-12T08:00:00.000Z',
-      endUtc: '2026-11-12T09:00:00.000Z'
-    }
-  }];
-
-  assert.equal(domain.hasConflict(bookings, 'vehicle-1', '2026-11-12T09:00:00.000Z', '2026-11-12T10:00:00.000Z'), false);
-});
-
-test('detects overlapping confirmed bookings for the same vehicle only', () => {
-  const bookings = [
-    {
-      details: {
-        deviceId: 'vehicle-1',
-        status: 'confirmed',
-        startUtc: '2026-11-12T08:00:00.000Z',
-        endUtc: '2026-11-12T10:00:00.000Z'
-      }
-    },
-    {
-      details: {
-        deviceId: 'vehicle-1',
-        status: 'cancelled',
-        startUtc: '2026-11-12T08:00:00.000Z',
-        endUtc: '2026-11-12T10:00:00.000Z'
-      }
-    }
-  ];
-
-  assert.equal(domain.hasConflict(bookings, 'vehicle-1', '2026-11-12T09:00:00.000Z', '2026-11-12T11:00:00.000Z'), true);
-  assert.equal(domain.hasConflict(bookings, 'vehicle-2', '2026-11-12T09:00:00.000Z', '2026-11-12T11:00:00.000Z'), false);
-});
-
-test('converts local form values to valid UTC intervals and rejects invalid intervals', () => {
-  const start = '2026-11-12T08:30';
-  const end = '2026-11-12T09:30';
-  const interval = domain.toUtcInterval(start, end);
-
-  assert.equal(interval.startUtc, new Date(start).toISOString());
-  assert.equal(interval.endUtc, new Date(end).toISOString());
-  assert.throws(() => domain.toUtcInterval(end, start), /must be after/);
-  assert.throws(() => domain.toUtcInterval('', end), /required/);
-});
-
-test('filters history to bookings that overlap the selected local date range', () => {
-  const startOfDay = new Date('2026-11-12T00:00:00');
-  const nextDay = new Date('2026-11-13T00:00:00');
-  const bookings = [
-    {
-      id: 'overlapping',
-      details: {
-        startUtc: new Date(startOfDay.getTime() - 60 * 60 * 1000).toISOString(),
-        endUtc: new Date(startOfDay.getTime() + 60 * 60 * 1000).toISOString(),
-        status: 'cancelled'
-      }
-    },
-    {
-      id: 'inside',
-      details: {
-        startUtc: new Date(startOfDay.getTime() + 2 * 60 * 60 * 1000).toISOString(),
-        endUtc: new Date(startOfDay.getTime() + 3 * 60 * 60 * 1000).toISOString(),
-        status: 'confirmed'
-      }
-    },
-    {
-      id: 'ends-at-start',
-      details: {
-        startUtc: new Date(startOfDay.getTime() - 2 * 60 * 60 * 1000).toISOString(),
-        endUtc: startOfDay.toISOString(),
-        status: 'confirmed'
-      }
-    },
-    {
-      id: 'starts-after-range',
-      details: {
-        startUtc: nextDay.toISOString(),
-        endUtc: new Date(nextDay.getTime() + 60 * 60 * 1000).toISOString(),
-        status: 'confirmed'
-      }
-    }
-  ];
-
-  const filtered = domain.filterBookings(bookings, {
-    fromDate: '2026-11-12',
-    toDate: '2026-11-12'
+test('validates required purpose, destination, and UTC interval with epochs', () => {
+  const start = '2026-11-25T08:30';
+  const end = '2026-11-25T10:00';
+  const result = domain.validateBookingInput({
+    startLocal: start,
+    endLocal: end,
+    purpose: '  Customer visit  ',
+    destination: '  Cikarang Industrial Area  '
   });
 
-  assert.deepEqual(filtered.map((booking) => booking.id), ['overlapping', 'inside']);
+  assert.equal(result.startUtc, new Date(start).toISOString());
+  assert.equal(result.endUtc, new Date(end).toISOString());
+  assert.equal(result.startEpoch, new Date(start).getTime());
+  assert.equal(result.endEpoch, new Date(end).getTime());
+  assert.equal(result.purpose, 'Customer visit');
+  assert.equal(result.destination, 'Cikarang Industrial Area');
+
+  assert.throws(() => domain.validateBookingInput({
+    startLocal: start,
+    endLocal: end,
+    purpose: '   ',
+    destination: 'Bandung'
+  }), /Purpose is required/);
+
+  assert.throws(() => domain.validateBookingInput({
+    startLocal: start,
+    endLocal: end,
+    purpose: 'Visit',
+    destination: ''
+  }), /Destination is required/);
+
+  assert.throws(() => domain.toUtcInterval(end, start), /must be after/);
 });
 
-test('filters booking history by vehicle, status, and requester', () => {
+test('validates approval decisions for approve and reject modes', () => {
+  const approved = domain.validateApprovalDecision({
+    decision: 'approve',
+    deviceId: 'b1',
+    driverId: 'u2',
+    approvalNotes: '  Take keys at reception  '
+  });
+  assert.deepEqual(approved, {
+    decision: 'approve',
+    deviceId: 'b1',
+    driverId: 'u2',
+    approvalNotes: 'Take keys at reception'
+  });
+
+  assert.throws(() => domain.validateApprovalDecision({
+    decision: 'approve',
+    deviceId: '',
+    driverId: 'u2'
+  }), /active vehicle/);
+
+  assert.throws(() => domain.validateApprovalDecision({
+    decision: 'approve',
+    deviceId: 'b1',
+    driverId: ''
+  }), /active driver/);
+
+  const rejected = domain.validateApprovalDecision({
+    decision: 'reject',
+    deviceId: 'b1',
+    driverId: 'u2',
+    approvalNotes: '  All vehicles under maintenance  '
+  });
+  assert.deepEqual(rejected, {
+    decision: 'reject',
+    deviceId: null,
+    driverId: null,
+    approvalNotes: 'All vehicles under maintenance'
+  });
+
+  assert.throws(() => domain.validateApprovalDecision({
+    decision: 'reject',
+    approvalNotes: '   '
+  }), /Rejection notes are required/);
+});
+
+test('detects overlapping vehicle and driver conflicts on approved and legacy confirmed bookings only', () => {
   const bookings = [
     {
-      id: 'matching',
+      id: 'rec-approved',
       details: {
         deviceId: 'vehicle-1',
-        status: 'confirmed',
-        createdBy: 'Alice Smith'
+        driverId: 'driver-1',
+        status: 'approved',
+        startUtc: '2026-11-25T08:00:00.000Z',
+        endUtc: '2026-11-25T10:00:00.000Z'
       }
     },
     {
-      id: 'wrong-status',
-      details: {
-        deviceId: 'vehicle-1',
-        status: 'cancelled',
-        createdBy: 'Alice Smith'
-      }
-    },
-    {
-      id: 'wrong-requester',
-      details: {
-        deviceId: 'vehicle-1',
-        status: 'confirmed',
-        createdBy: 'Bob Jones'
-      }
-    },
-    {
-      id: 'wrong-vehicle',
+      id: 'rec-legacy',
       details: {
         deviceId: 'vehicle-2',
         status: 'confirmed',
-        createdBy: 'Alice Smith'
+        startUtc: '2026-11-25T08:00:00.000Z',
+        endUtc: '2026-11-25T10:00:00.000Z'
+      }
+    },
+    {
+      id: 'rec-pending',
+      details: {
+        deviceId: 'vehicle-3',
+        driverId: 'driver-2',
+        status: 'pending',
+        startUtc: '2026-11-25T08:00:00.000Z',
+        endUtc: '2026-11-25T10:00:00.000Z'
+      }
+    },
+    {
+      id: 'rec-cancelled',
+      details: {
+        deviceId: 'vehicle-3',
+        driverId: 'driver-2',
+        status: 'cancelled',
+        startUtc: '2026-11-25T08:00:00.000Z',
+        endUtc: '2026-11-25T10:00:00.000Z'
       }
     }
   ];
 
-  const filtered = domain.filterBookings(bookings, {
-    deviceId: 'vehicle-1',
-    status: 'confirmed',
-    requester: 'alice'
-  });
+  // Overlapping intervals
+  assert.equal(domain.hasVehicleConflict(bookings, 'vehicle-1', '2026-11-25T09:00:00.000Z', '2026-11-25T11:00:00.000Z'), true);
+  assert.equal(domain.hasVehicleConflict(bookings, 'vehicle-2', '2026-11-25T09:00:00.000Z', '2026-11-25T11:00:00.000Z'), true);
+  assert.equal(domain.hasVehicleConflict(bookings, 'vehicle-3', '2026-11-25T09:00:00.000Z', '2026-11-25T11:00:00.000Z'), false);
+  assert.equal(domain.hasDriverConflict(bookings, 'driver-1', '2026-11-25T09:00:00.000Z', '2026-11-25T11:00:00.000Z'), true);
+  assert.equal(domain.hasDriverConflict(bookings, 'driver-2', '2026-11-25T09:00:00.000Z', '2026-11-25T11:00:00.000Z'), false);
 
-  assert.deepEqual(filtered.map((booking) => booking.id), ['matching']);
+  // Adjacent interval is allowed
+  assert.equal(domain.hasVehicleConflict(bookings, 'vehicle-1', '2026-11-25T10:00:00.000Z', '2026-11-25T11:00:00.000Z'), false);
+  assert.equal(domain.hasDriverConflict(bookings, 'driver-1', '2026-11-25T10:00:00.000Z', '2026-11-25T11:00:00.000Z'), false);
+
+  // Self exclusion works
+  assert.equal(domain.hasVehicleConflict(bookings, 'vehicle-1', '2026-11-25T08:00:00.000Z', '2026-11-25T10:00:00.000Z', 'rec-approved'), false);
+
+  // Conflicting resource lookup map
+  const conflicts = domain.getConflictingResources(bookings, '2026-11-25T09:00:00.000Z', '2026-11-25T10:30:00.000Z');
+  assert.equal(Boolean(conflicts.vehicles['vehicle-1']), true);
+  assert.equal(Boolean(conflicts.vehicles['vehicle-2']), true);
+  assert.equal(Boolean(conflicts.vehicles['vehicle-3']), false);
+  assert.equal(Boolean(conflicts.drivers['driver-1']), true);
+  assert.equal(Boolean(conflicts.drivers['driver-2']), false);
 });
 
-test('rejects a report date range whose end precedes its start', () => {
-  assert.throws(() => domain.filterBookings([], {
-    fromDate: '2026-11-13',
-    toDate: '2026-11-12'
-  }), /on or after/);
+test('enforces requester edit and cancel rules by booking status and ownership', () => {
+  assert.equal(domain.canRequesterEdit({ createdBy: 'heppy@opexcg.com', status: 'pending' }, 'HEPPY@opexcg.com'), true);
+  assert.equal(domain.canRequesterEdit({ createdBy: 'heppy@opexcg.com', status: 'approved' }, 'heppy@opexcg.com'), false);
+  assert.equal(domain.canRequesterEdit({ createdBy: 'heppy@opexcg.com', status: 'confirmed' }, 'heppy@opexcg.com'), false);
+  assert.equal(domain.canRequesterEdit({ createdBy: 'other@opexcg.com', status: 'pending' }, 'heppy@opexcg.com'), false);
+
+  assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'pending' }, 'heppy@opexcg.com'), true);
+  assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'approved' }, 'heppy@opexcg.com'), true);
+  assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'confirmed' }, 'heppy@opexcg.com'), true);
+  assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'rejected' }, 'heppy@opexcg.com'), false);
+  assert.equal(domain.canRequesterCancel({ createdBy: 'heppy@opexcg.com', status: 'cancelled' }, 'heppy@opexcg.com'), false);
+  assert.equal(domain.canRequesterCancel({ createdBy: 'other@opexcg.com', status: 'approved' }, 'heppy@opexcg.com'), false);
+});
+
+test('filters My Bookings by current user and time range presets (default this_week)', () => {
+  // Wednesday 2026-11-25 12:00 local -> week is Mon Nov 23 to Sun Nov 29
+  const now = new Date('2026-11-25T12:00:00');
+  const bookings = [
+    {
+      id: 'mine-this-week',
+      details: {
+        createdBy: 'heppy@opexcg.com',
+        status: 'pending',
+        startUtc: new Date('2026-11-25T15:00:00').toISOString(),
+        endUtc: new Date('2026-11-25T16:00:00').toISOString()
+      }
+    },
+    {
+      id: 'other-this-week',
+      details: {
+        createdBy: 'andri@opexcg.com',
+        status: 'pending',
+        startUtc: new Date('2026-11-25T15:00:00').toISOString(),
+        endUtc: new Date('2026-11-25T16:00:00').toISOString()
+      }
+    },
+    {
+      id: 'mine-next-week',
+      details: {
+        createdBy: 'heppy@opexcg.com',
+        status: 'pending',
+        startUtc: new Date('2026-12-02T09:00:00').toISOString(),
+        endUtc: new Date('2026-12-02T10:00:00').toISOString()
+      }
+    },
+    {
+      id: 'mine-last-month',
+      details: {
+        createdBy: 'heppy@opexcg.com',
+        status: 'approved',
+        startUtc: new Date('2026-10-10T09:00:00').toISOString(),
+        endUtc: new Date('2026-10-10T10:00:00').toISOString()
+      }
+    }
+  ];
+
+  assert.deepEqual(
+    domain.filterMyBookings(bookings, 'HEPPY@opexcg.com', 'this_week', now).map((b) => b.id),
+    ['mine-this-week']
+  );
+  assert.deepEqual(
+    domain.filterMyBookings(bookings, 'heppy@opexcg.com', 'upcoming', now).map((b) => b.id),
+    ['mine-this-week', 'mine-next-week']
+  );
+  assert.deepEqual(
+    domain.filterMyBookings(bookings, 'heppy@opexcg.com', 'this_month', now).map((b) => b.id),
+    ['mine-this-week']
+  );
+  assert.deepEqual(
+    domain.filterMyBookings(bookings, 'heppy@opexcg.com', 'all', now).map((b) => b.id),
+    ['mine-this-week', 'mine-next-week', 'mine-last-month']
+  );
+});
+
+test('filters approval queue and report history across all statuses', () => {
+  const bookings = [
+    { id: 'p', details: { status: 'pending', createdBy: 'alice@opex.com', startUtc: '2026-11-25T08:00:00.000Z', endUtc: '2026-11-25T09:00:00.000Z' } },
+    { id: 'a', details: { status: 'approved', deviceId: 'v1', createdBy: 'alice@opex.com', startUtc: '2026-11-25T08:00:00.000Z', endUtc: '2026-11-25T09:00:00.000Z' } },
+    { id: 'c', details: { status: 'confirmed', deviceId: 'v1', createdBy: 'bob@opex.com', startUtc: '2026-11-25T08:00:00.000Z', endUtc: '2026-11-25T09:00:00.000Z' } },
+    { id: 'r', details: { status: 'rejected', createdBy: 'alice@opex.com', startUtc: '2026-11-25T08:00:00.000Z', endUtc: '2026-11-25T09:00:00.000Z' } },
+    { id: 'x', details: { status: 'cancelled', createdBy: 'bob@opex.com', startUtc: '2026-11-25T08:00:00.000Z', endUtc: '2026-11-25T09:00:00.000Z' } }
+  ];
+
+  assert.deepEqual(domain.filterApprovalQueue(bookings, 'pending').map((b) => b.id), ['p']);
+  assert.deepEqual(domain.filterApprovalQueue(bookings, 'approved').map((b) => b.id), ['a', 'c']);
+  assert.deepEqual(domain.filterApprovalQueue(bookings, 'rejected').map((b) => b.id), ['r']);
+  assert.deepEqual(domain.filterApprovalQueue(bookings, 'all').map((b) => b.id), ['p', 'a', 'c', 'r', 'x']);
+
+  assert.deepEqual(domain.filterBookings(bookings, { status: 'rejected', requester: 'alice' }).map((b) => b.id), ['r']);
+  assert.deepEqual(domain.filterBookings(bookings, { status: 'approved', deviceId: 'v1' }).map((b) => b.id), ['a']);
+  assert.throws(() => domain.filterBookings(bookings, { fromDate: '2026-11-26', toDate: '2026-11-25' }), /on or after/);
 });
