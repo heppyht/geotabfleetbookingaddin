@@ -249,9 +249,69 @@ test('filters approval queue and report history across all statuses', () => {
   assert.deepEqual(domain.filterApprovalQueue(bookings, 'rejected').map((b) => b.id), ['r']);
   assert.deepEqual(domain.filterApprovalQueue(bookings, 'all').map((b) => b.id), ['p', 'a', 'c', 'r', 'x']);
 
-  assert.deepEqual(domain.filterBookings(bookings, { status: 'rejected', requester: 'alice' }).map((b) => b.id), ['r']);
+  assert.deepEqual(domain.filterBookings(bookings, { status: 'rejected', requester: 'alice@opex.com' }).map((b) => b.id), ['r']);
   assert.deepEqual(domain.filterBookings(bookings, { status: 'approved', deviceId: 'v1' }).map((b) => b.id), ['a']);
   assert.throws(() => domain.filterBookings(bookings, { fromDate: '2026-11-26', toDate: '2026-11-25' }), /on or after/);
+});
+
+test('computes real-time vehicle and driver availability from approved schedules', () => {
+  const nowMs = Date.parse('2026-11-25T10:00:00.000Z');
+  const bookings = [
+    {
+      id: 'active-now',
+      details: {
+        status: 'approved',
+        deviceId: 'v1',
+        driverId: 'd1',
+        startUtc: '2026-11-25T09:00:00.000Z',
+        endUtc: '2026-11-25T11:00:00.000Z'
+      }
+    },
+    {
+      id: 'next-later',
+      details: {
+        status: 'approved',
+        deviceId: 'v2',
+        driverId: 'd2',
+        startUtc: '2026-11-25T13:00:00.000Z',
+        endUtc: '2026-11-25T14:00:00.000Z'
+      }
+    },
+    {
+      id: 'next-sooner',
+      details: {
+        status: 'confirmed',
+        deviceId: 'v2',
+        driverId: 'd2',
+        startUtc: '2026-11-25T11:30:00.000Z',
+        endUtc: '2026-11-25T12:30:00.000Z'
+      }
+    },
+    {
+      id: 'pending-ignored',
+      details: {
+        status: 'pending',
+        deviceId: 'v3',
+        driverId: 'd3',
+        startUtc: '2026-11-25T09:30:00.000Z',
+        endUtc: '2026-11-25T10:30:00.000Z'
+      }
+    }
+  ];
+
+  const v1 = domain.getResourceAvailability(bookings, 'deviceId', 'v1', nowMs);
+  assert.equal(v1.state, 'in_use');
+  assert.equal(v1.currentBooking.id, 'active-now');
+
+  const v2 = domain.getResourceAvailability(bookings, 'deviceId', 'v2', nowMs);
+  assert.equal(v2.state, 'available');
+  assert.equal(v2.currentBooking, null);
+  assert.equal(v2.nextBooking.id, 'next-sooner');
+
+  const d3 = domain.getResourceAvailability(bookings, 'driverId', 'd3', nowMs);
+  assert.equal(d3.state, 'available');
+  assert.equal(d3.currentBooking, null);
+  assert.equal(d3.nextBooking, null);
 });
 
 test('formats 24-hour schedule summaries and durations for same-day and multi-day trips', () => {

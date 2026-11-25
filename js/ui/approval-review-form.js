@@ -1,6 +1,12 @@
 (function (root) {
   'use strict';
 
+  function formatConflictSlot(booking, fmt) {
+    if (!booking || !booking.details || !fmt) return '';
+    var summary = fmt.getScheduleSummary(booking.details.startUtc, booking.details.endUtc);
+    return summary.timeText ? ' (' + summary.timeText + ')' : '';
+  }
+
   function buildDecisionFieldset() {
     var fieldset = document.createElement('fieldset');
     fieldset.className = 'decision-group field-wide';
@@ -37,87 +43,117 @@
     };
   }
 
-  function buildVehicleField(recordId, activeDevices, vehicleConflicts) {
+  function buildVehicleField(recordId, activeDevices, vehicleConflicts, fmt) {
     var field = document.createElement('div');
     field.className = 'field';
     var label = document.createElement('label');
     var selectId = 'approval-vehicle-' + recordId;
     label.htmlFor = selectId;
-    label.textContent = 'Assign vehicle (Active) *';
+    label.textContent = 'Assign vehicle (Available) *';
 
     var select = document.createElement('select');
     select.id = selectId;
     select.name = 'deviceId';
     select.required = true;
 
+    var availableDevices = [];
+    var busyLabels = [];
+    activeDevices.forEach(function (device) {
+      var conflict = vehicleConflicts[device.id];
+      if (conflict) {
+        busyLabels.push((device.name || device.id) + formatConflictSlot(conflict, fmt));
+      } else {
+        availableDevices.push(device);
+      }
+    });
+
     var placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = activeDevices.length
-      ? 'Select an active vehicle'
-      : 'No active vehicles available';
+    if (activeDevices.length === 0) {
+      placeholder.textContent = 'No active vehicles found';
+      select.disabled = true;
+    } else if (availableDevices.length === 0) {
+      placeholder.textContent = 'No vehicles available for this time slot';
+      select.disabled = true;
+    } else {
+      placeholder.textContent = 'Select an available vehicle';
+    }
     select.appendChild(placeholder);
 
-    var availableCount = 0;
-    activeDevices.forEach(function (device) {
+    availableDevices.forEach(function (device) {
       var option = document.createElement('option');
-      var conflict = vehicleConflicts[device.id];
-      if (!conflict) availableCount += 1;
       option.value = device.id;
-      option.textContent = (device.name || device.id) +
-        (conflict ? ' (Unavailable: booked in this slot)' : '');
-      option.disabled = Boolean(conflict);
+      option.textContent = device.name || device.id;
       select.appendChild(option);
     });
 
     var hint = document.createElement('p');
-    hint.className = availableCount === 0 ? 'field-hint field-hint-warn' : 'field-hint';
-    hint.textContent = activeDevices.length === 0
-      ? 'No active vehicles found in this account.'
-      : availableCount + ' of ' + activeDevices.length + ' active ' +
-        (activeDevices.length === 1 ? 'vehicle' : 'vehicles') + ' available for this slot.';
+    hint.className = availableDevices.length === 0 ? 'field-hint field-hint-warn' : 'field-hint';
+    if (activeDevices.length === 0) {
+      hint.textContent = 'No active vehicles found in this account.';
+    } else if (availableDevices.length === 0) {
+      hint.textContent = '0 of ' + activeDevices.length + ' active vehicles available (booked: ' +
+        busyLabels.join(', ') + '). Switch to Reject or cancel a conflicting booking.';
+    } else {
+      hint.textContent = availableDevices.length + ' of ' + activeDevices.length + ' active ' +
+        (activeDevices.length === 1 ? 'vehicle' : 'vehicles') + ' available.' +
+        (busyLabels.length ? ' Booked: ' + busyLabels.join(', ') + '.' : '');
+    }
 
     field.appendChild(label);
     field.appendChild(select);
     field.appendChild(hint);
-    return { field: field, select: select };
+    return { field: field, select: select, availableCount: availableDevices.length };
   }
 
-  function buildDriverField(recordId, activeDrivers, driverConflicts, usersLoadState, userDomain) {
+  function buildDriverField(recordId, activeDrivers, driverConflicts, usersLoadState, userDomain, fmt) {
     var field = document.createElement('div');
     field.className = 'field';
     var label = document.createElement('label');
     var selectId = 'approval-driver-' + recordId;
     label.htmlFor = selectId;
-    label.textContent = 'Assign driver (Active Driver) *';
+    label.textContent = 'Assign driver (Available Driver) *';
 
     var select = document.createElement('select');
     select.id = selectId;
     select.name = 'driverId';
     select.required = true;
 
+    var availableDrivers = [];
+    var busyLabels = [];
+    activeDrivers.forEach(function (driver) {
+      var conflict = driverConflicts[driver.id];
+      if (conflict) {
+        busyLabels.push(userDomain.getUserFullName(driver) + formatConflictSlot(conflict, fmt));
+      } else {
+        availableDrivers.push(driver);
+      }
+    });
+
     var placeholder = document.createElement('option');
     placeholder.value = '';
     if (usersLoadState === 'loading') {
       placeholder.textContent = 'Loading active drivers...';
+      select.disabled = true;
     } else if (usersLoadState === 'error') {
-      placeholder.textContent = 'Unable to load drivers (check User permission)';
+      placeholder.textContent = 'Unable to load drivers';
+      select.disabled = true;
+    } else if (activeDrivers.length === 0) {
+      placeholder.textContent = 'No active drivers found';
+      select.disabled = true;
+    } else if (availableDrivers.length === 0) {
+      placeholder.textContent = 'No drivers available for this time slot';
+      select.disabled = true;
     } else {
-      placeholder.textContent = activeDrivers.length
-        ? 'Select an active driver'
-        : 'No active drivers available';
+      placeholder.textContent = 'Select an available driver';
     }
     select.appendChild(placeholder);
 
-    var availableCount = 0;
-    activeDrivers.forEach(function (driver) {
+    availableDrivers.forEach(function (driver) {
       var option = document.createElement('option');
-      var conflict = driverConflicts[driver.id];
-      if (!conflict) availableCount += 1;
       option.value = driver.id;
       option.textContent = userDomain.getUserFullName(driver) +
-        (driver.login ? ' (' + driver.login + ')' : '') +
-        (conflict ? ' - Unavailable (assigned in this slot)' : '');
-      option.disabled = Boolean(conflict);
+        (driver.login ? ' (' + driver.login + ')' : '');
       select.appendChild(option);
     });
 
@@ -128,18 +164,24 @@
     } else if (usersLoadState === 'error') {
       hint.className = 'field-hint field-hint-warn';
       hint.textContent = 'Unable to load drivers. Verify User read access.';
+    } else if (activeDrivers.length === 0) {
+      hint.className = 'field-hint field-hint-warn';
+      hint.textContent = 'No active driver accounts found.';
+    } else if (availableDrivers.length === 0) {
+      hint.className = 'field-hint field-hint-warn';
+      hint.textContent = '0 of ' + activeDrivers.length + ' active drivers available (assigned: ' +
+        busyLabels.join(', ') + '). Switch to Reject or cancel a conflicting booking.';
     } else {
-      hint.className = availableCount === 0 ? 'field-hint field-hint-warn' : 'field-hint';
-      hint.textContent = activeDrivers.length === 0
-        ? 'No active driver accounts found.'
-        : availableCount + ' of ' + activeDrivers.length + ' active ' +
-          (activeDrivers.length === 1 ? 'driver' : 'drivers') + ' available for this slot.';
+      hint.className = 'field-hint';
+      hint.textContent = availableDrivers.length + ' of ' + activeDrivers.length + ' active ' +
+        (activeDrivers.length === 1 ? 'driver' : 'drivers') + ' available.' +
+        (busyLabels.length ? ' Assigned: ' + busyLabels.join(', ') + '.' : '');
     }
 
     field.appendChild(label);
     field.appendChild(select);
     field.appendChild(hint);
-    return { field: field, select: select };
+    return { field: field, select: select, availableCount: availableDrivers.length };
   }
 
   function build(options) {
@@ -149,6 +191,7 @@
     var activeDrivers = options.activeDrivers;
     var usersLoadState = options.usersLoadState;
     var userDomain = options.userDomain;
+    var fmt = options.formatters;
     var isSubmitting = options.isSubmitting;
 
     var panel = document.createElement('div');
@@ -159,8 +202,8 @@
     form.setAttribute('data-review-form', record.id);
 
     var decision = buildDecisionFieldset();
-    var vehicle = buildVehicleField(record.id, activeDevices, conflicts.vehicles);
-    var driver = buildDriverField(record.id, activeDrivers, conflicts.drivers, usersLoadState, userDomain);
+    var vehicle = buildVehicleField(record.id, activeDevices, conflicts.vehicles, fmt);
+    var driver = buildDriverField(record.id, activeDrivers, conflicts.drivers, usersLoadState, userDomain, fmt);
 
     var notesField = document.createElement('div');
     notesField.className = 'field field-wide';
@@ -188,7 +231,6 @@
     submitBtn.className = 'fm-btn-approve';
     submitBtn.textContent = 'Confirm approval';
     submitBtn.setAttribute('data-review-submit', 'true');
-    submitBtn.disabled = Boolean(isSubmitting);
 
     var closeBtn = document.createElement('button');
     closeBtn.type = 'button';
@@ -208,6 +250,9 @@
 
     function syncDecisionMode() {
       var isReject = decision.rejectRadio.checked;
+      var driversReady = usersLoadState !== 'loading' && usersLoadState !== 'error';
+      var canApprove = vehicle.availableCount > 0 && driver.availableCount > 0 && driversReady;
+
       vehicle.field.hidden = isReject;
       driver.field.hidden = isReject;
       vehicle.select.required = !isReject;
@@ -219,11 +264,13 @@
         : 'Optional dispatch notes (pickup instructions, key location)';
       submitBtn.className = isReject ? 'fm-btn-reject' : 'fm-btn-approve';
       submitBtn.textContent = isReject ? 'Confirm rejection' : 'Confirm approval';
+      submitBtn.disabled = Boolean(isSubmitting) || (!isReject && !canApprove);
       inlineError.hidden = true;
     }
 
     decision.approveRadio.addEventListener('change', syncDecisionMode);
     decision.rejectRadio.addEventListener('change', syncDecisionMode);
+    syncDecisionMode();
 
     panel.appendChild(form);
     return panel;

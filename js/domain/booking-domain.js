@@ -189,6 +189,43 @@
     return { vehicles: vehicles, drivers: drivers };
   }
 
+  function getResourceAvailability(bookings, fieldName, resourceId, nowMs) {
+    if (!resourceId) {
+      return { state: 'available', currentBooking: null, nextBooking: null };
+    }
+
+    var now = Number.isFinite(nowMs) ? nowMs : Date.now();
+    var targetId = String(resourceId);
+    var currentBooking = null;
+    var nextBooking = null;
+    var nextStart = Number.POSITIVE_INFINITY;
+
+    (bookings || []).forEach(function (booking) {
+      if (!booking || !booking.details) return;
+      var details = booking.details;
+      if (!isScheduledStatus(details.status)) return;
+      if (String(details[fieldName] || '') !== targetId) return;
+
+      var interval = parseBookingInterval(details);
+      if (!interval) return;
+
+      if (interval.start <= now && now < interval.end) {
+        if (!currentBooking || interval.end > Date.parse(currentBooking.details.endUtc)) {
+          currentBooking = booking;
+        }
+      } else if (interval.start > now && interval.start < nextStart) {
+        nextStart = interval.start;
+        nextBooking = booking;
+      }
+    });
+
+    return {
+      state: currentBooking ? 'in_use' : 'available',
+      currentBooking: currentBooking,
+      nextBooking: nextBooking
+    };
+  }
+
   function isBookingOwner(details, currentUserName) {
     if (!details || !currentUserName) return false;
     return String(details.createdBy || '').trim().toLowerCase() === String(currentUserName).trim().toLowerCase();
@@ -302,7 +339,7 @@
 
       var deviceId = String(details.deviceId || details.deviceName || '');
       if (filters.deviceId && deviceId !== filters.deviceId) return false;
-      if (requester && String(details.createdBy || '').toLowerCase().indexOf(requester) === -1) return false;
+      if (requester && String(details.createdBy || '').trim().toLowerCase() !== requester) return false;
       if ((fromTime !== null || toExclusive !== null) && !isBookingInBounds(details, bounds)) return false;
 
       return true;
@@ -329,6 +366,7 @@
     filterMyBookings: filterMyBookings,
     findResourceConflict: findResourceConflict,
     getConflictingResources: getConflictingResources,
+    getResourceAvailability: getResourceAvailability,
     getTimeRangeBounds: getTimeRangeBounds,
     hasConflict: hasVehicleConflict,
     hasDriverConflict: hasDriverConflict,

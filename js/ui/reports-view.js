@@ -3,6 +3,7 @@
 
   function createReportsView(deps) {
     var domain = deps.bookingDomain;
+    var userDomain = deps.userDomain;
     var fmt = deps.formatters;
     var state = deps.state;
 
@@ -32,6 +33,55 @@
 
     function getReportVehicleKey(details) {
       return String((details && (details.deviceId || details.deviceName)) || '');
+    }
+
+    function formatRequesterLabel(login) {
+      var matched = (state.users || []).find(function (user) {
+        return user && String(user.login || '').toLowerCase() === login.toLowerCase();
+      });
+      if (!matched) return login;
+      var fullName = userDomain.getUserFullName(matched);
+      return fullName.toLowerCase() === login.toLowerCase()
+        ? login
+        : fullName + ' (' + login + ')';
+    }
+
+    function renderRequesterOptions() {
+      var selectedValue = reportRequester.value;
+      var requesters = [];
+      var seen = {};
+
+      state.bookings.forEach(function (record) {
+        var raw = String((record.details && record.details.createdBy) || '').trim();
+        var key = raw.toLowerCase();
+        if (!key || seen[key]) return;
+        seen[key] = true;
+        requesters.push({
+          value: raw,
+          label: formatRequesterLabel(raw)
+        });
+      });
+
+      requesters.sort(function (first, second) {
+        return first.label.localeCompare(second.label);
+      });
+
+      reportRequester.textContent = '';
+      var allOption = document.createElement('option');
+      allOption.value = '';
+      allOption.textContent = 'All requesters';
+      reportRequester.appendChild(allOption);
+
+      requesters.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = entry.value;
+        option.textContent = entry.label;
+        reportRequester.appendChild(option);
+      });
+
+      reportRequester.value = requesters.some(function (entry) {
+        return entry.value.toLowerCase() === selectedValue.toLowerCase();
+      }) ? selectedValue : '';
     }
 
     function renderVehicleOptions() {
@@ -87,22 +137,24 @@
         return secondStart - firstStart;
       });
 
-      var vehicleKeys = [];
       var pendingCount = 0;
       var approvedCount = 0;
+      var rejectedCount = 0;
+      var cancelledCount = 0;
       filteredBookings.forEach(function (record) {
-        var details = record.details || {};
-        var status = domain.normalizeStatus(details.status);
-        var vehicleKey = getReportVehicleKey(details);
-        if (vehicleKey && vehicleKeys.indexOf(vehicleKey) === -1) vehicleKeys.push(vehicleKey);
+        var status = domain.normalizeStatus(record.details && record.details.status);
         if (status === 'pending') pendingCount += 1;
         if (status === 'approved' || status === 'confirmed') approvedCount += 1;
+        if (status === 'rejected') rejectedCount += 1;
+        if (status === 'cancelled') cancelledCount += 1;
       });
 
       document.getElementById('reportTotalBookings').textContent = String(filteredBookings.length);
       document.getElementById('reportPendingBookings').textContent = String(pendingCount);
       document.getElementById('reportApprovedBookings').textContent = String(approvedCount);
-      document.getElementById('reportVehiclesUsed').textContent = String(vehicleKeys.length);
+      document.getElementById('reportClosedBookings').textContent = String(rejectedCount + cancelledCount);
+      document.getElementById('reportClosedBreakdown').textContent =
+        rejectedCount + ' rejected, ' + cancelledCount + ' cancelled';
 
       reportHistoryBody.textContent = '';
       if (filteredBookings.length === 0) {
@@ -230,6 +282,7 @@
     return {
       bind: bind,
       render: render,
+      renderRequesterOptions: renderRequesterOptions,
       renderVehicleOptions: renderVehicleOptions
     };
   }

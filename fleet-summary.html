@@ -28,7 +28,7 @@
             <span>Approval</span>
             <span id="approvalPendingBadge" class="nav-badge" hidden>0</span>
           </button>
-          <button class="nav-item" type="button" data-page="users">Users</button>
+          <button class="nav-item" type="button" data-page="users" hidden>Drivers &amp; Users</button>
           <button class="nav-item" type="button" data-page="reports">Reports</button>
           <button class="nav-item" type="button" data-page="vehicles">Vehicles</button>
         </div>
@@ -40,7 +40,7 @@
             <div>
               <p class="eyebrow">OPERATIONS</p>
               <h2 id="bookingPageTitle">Vehicle bookings</h2>
-              <p class="page-description">Submit booking requests with your travel schedule, purpose, and destination. An Administrator will assign a vehicle and driver during approval.</p>
+              <p class="page-description">Submit booking requests with your travel schedule, purpose, and destination. An Administrator will assign an available vehicle and driver during approval.</p>
             </div>
           </div>
 
@@ -113,7 +113,7 @@
             <div>
               <p class="eyebrow">DISPATCH &amp; REVIEW</p>
               <h2 id="approvalPageTitle">Approval queue</h2>
-              <p class="page-description">Review pending booking requests, assign an active vehicle and driver, or reject with a reason.</p>
+              <p class="page-description">Review pending booking requests, assign an available vehicle and driver, or reject with a reason.</p>
             </div>
           </div>
 
@@ -156,58 +156,132 @@
         <section id="page-users" class="page-view" aria-labelledby="usersPageTitle" hidden>
           <div class="page-heading">
             <div>
-              <p class="eyebrow">ACCESS</p>
-              <h2 id="usersPageTitle">Users</h2>
-              <p class="page-description">Browse user accounts, driver statuses, and MyGeotab security clearances available from the current database.</p>
+              <p class="eyebrow">ACCESS &amp; DISPATCH</p>
+              <h2 id="usersPageTitle">Drivers &amp; Users</h2>
+              <p class="page-description">Monitor driver availability from approved schedules and review MyGeotab user clearances.</p>
             </div>
           </div>
-          <section class="panel" aria-labelledby="usersTableTitle">
+
+          <div id="usersRestrictedNotice" class="panel" hidden>
+            <p class="empty">Access restricted. Only users with Administrator security clearance can view the Drivers &amp; Users directory.</p>
+          </div>
+
+          <section id="usersWorkspace" class="panel" aria-labelledby="usersTableTitle" hidden>
             <div class="users-toolbar">
               <div>
                 <p class="eyebrow">DIRECTORY</p>
-                <h3 id="usersTableTitle">All users</h3>
+                <h3 id="usersTableTitle">Drivers and account directory</h3>
                 <p class="page-description">Only records visible to the current MyGeotab session are shown. Some MyAdmin accounts may not be visible to BasicAuthentication users.</p>
               </div>
               <button id="refreshUsersButton" class="secondary" type="button">Refresh users</button>
             </div>
             <div id="userDataStatus" class="status user-data-status" role="status" aria-live="polite">Select this tab to load users from the current database.</div>
-            <div class="users-filters">
-              <div class="field">
-                <label for="userSearch">Search users</label>
-                <input id="userSearch" type="search" placeholder="Name, email, functional role, clearance, or driver">
-              </div>
-              <div class="field">
-                <label for="userStatusFilter">Account status</label>
-                <select id="userStatusFilter">
-                  <option value="all">All statuses</option>
-                  <option value="active">Active</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="unknown">Unknown</option>
-                </select>
-              </div>
+
+            <div class="sub-tabs" role="tablist" aria-label="Drivers and users views">
+              <button id="subTabDrivers" class="sub-tab" type="button" role="tab" aria-selected="true" aria-controls="driversSubPanel">Drivers</button>
+              <button id="subTabAllUsers" class="sub-tab" type="button" role="tab" aria-selected="false" aria-controls="allUsersSubPanel">All users</button>
             </div>
-            <div class="table-wrap">
-              <table class="data-table users-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Email / login</th>
-                    <th scope="col">Functional role</th>
-                    <th scope="col">Clearance</th>
-                    <th scope="col">Driver status</th>
-                    <th scope="col">Account status</th>
-                  </tr>
-                </thead>
-                <tbody id="userListBody">
-                  <tr>
-                    <td colspan="6"><p class="empty table-empty">User data has not been loaded.</p></td>
-                  </tr>
-                </tbody>
-              </table>
+
+            <div id="driversSubPanel" role="tabpanel" aria-labelledby="subTabDrivers">
+              <div class="kpi-grid-3">
+                <article class="panel report-card">
+                  <p class="eyebrow">ACTIVE DRIVERS</p>
+                  <p id="driversActiveCount" class="report-value">0</p>
+                  <p class="report-note">Eligible for approval assignment</p>
+                </article>
+                <article class="panel report-card">
+                  <p class="eyebrow">AVAILABLE NOW</p>
+                  <p id="driversAvailableCount" class="report-value">0</p>
+                  <p class="report-note">Not assigned to an ongoing trip</p>
+                </article>
+                <article class="panel report-card">
+                  <p class="eyebrow">ON TRIP NOW</p>
+                  <p id="driversOnTripCount" class="report-value">0</p>
+                  <p class="report-note">Assigned to an active schedule</p>
+                </article>
+              </div>
+
+              <div class="fleet-board-filters">
+                <div class="field">
+                  <label for="driverSearch">Search drivers</label>
+                  <input id="driverSearch" type="search" placeholder="Name or email">
+                </div>
+                <div class="field">
+                  <label for="driverAvailabilityFilter">Availability</label>
+                  <select id="driverAvailabilityFilter">
+                    <option value="all">All statuses</option>
+                    <option value="available">Available now</option>
+                    <option value="in_use">On trip now</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="table-wrap">
+                <table class="data-table fleet-board-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Driver</th>
+                      <th scope="col">Availability</th>
+                      <th scope="col">Current / Next trip</th>
+                      <th scope="col">Account status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="driverBoardBody">
+                    <tr>
+                      <td colspan="4"><p class="empty table-empty">Driver data has not been loaded.</p></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="table-note">Driver availability reflects approved booking schedules for the current time. Only Active Driver accounts can be assigned during approval.</p>
             </div>
-            <p class="table-note">Administrator security clearance authorizes access to the Approval page. Active users marked as Driver are eligible for driver assignment during approval.</p>
-            <p class="table-note">Account status is derived from each user's active-from and active-to dates. It does not guarantee that the user can authenticate successfully.</p>
+
+            <div id="allUsersSubPanel" role="tabpanel" aria-labelledby="subTabAllUsers" hidden>
+              <div class="users-filters">
+                <div class="field">
+                  <label for="userSearch">Search users</label>
+                  <input id="userSearch" type="search" placeholder="Name, email, clearance, or driver">
+                </div>
+                <div class="field">
+                  <label for="userDriverFilter">Driver status</label>
+                  <select id="userDriverFilter">
+                    <option value="all">All users</option>
+                    <option value="driver">Drivers only</option>
+                    <option value="non_driver">Not a driver</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="userStatusFilter">Account status</label>
+                  <select id="userStatusFilter">
+                    <option value="all">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="unknown">Unknown</option>
+                  </select>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="data-table users-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">Email / login</th>
+                      <th scope="col">Clearance</th>
+                      <th scope="col">Driver status</th>
+                      <th scope="col">Account status</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userListBody">
+                    <tr>
+                      <td colspan="5"><p class="empty table-empty">User data has not been loaded.</p></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="table-note">Administrator security clearance authorizes access to Approval and Drivers &amp; Users. Account status is derived from each user's active-from and active-to dates.</p>
+            </div>
           </section>
         </section>
 
@@ -257,7 +331,9 @@
               </div>
               <div class="field">
                 <label for="reportRequester">Booked by</label>
-                <input id="reportRequester" name="requester" type="search" placeholder="Search requester">
+                <select id="reportRequester" name="requester">
+                  <option value="">All requesters</option>
+                </select>
               </div>
               <div class="report-filter-actions">
                 <button type="submit">Apply filters</button>
@@ -284,9 +360,9 @@
               <p class="report-note">Approved and legacy confirmed</p>
             </article>
             <article class="panel report-card">
-              <p class="eyebrow">VEHICLES USED</p>
-              <p id="reportVehiclesUsed" class="report-value">0</p>
-              <p class="report-note">Distinct assigned vehicles</p>
+              <p class="eyebrow">REJECTED / CANCELLED</p>
+              <p id="reportClosedBookings" class="report-value">0</p>
+              <p id="reportClosedBreakdown" class="report-note">0 rejected, 0 cancelled</p>
             </article>
           </div>
 
@@ -335,20 +411,68 @@
             <div>
               <p class="eyebrow">FLEET</p>
               <h2 id="vehiclesPageTitle">Vehicles</h2>
-              <p class="page-description">Vehicles available to this MyGeotab account.</p>
+              <p class="page-description">Real-time booking availability and operational schedule for vehicles visible to this account.</p>
             </div>
           </div>
+
+          <div class="kpi-grid-3">
+            <article class="panel report-card">
+              <p class="eyebrow">ACTIVE VEHICLES</p>
+              <p id="vehiclesActiveCount" class="report-value">0</p>
+              <p class="report-note">Eligible for approval assignment</p>
+            </article>
+            <article class="panel report-card">
+              <p class="eyebrow">AVAILABLE NOW</p>
+              <p id="vehiclesAvailableCount" class="report-value">0</p>
+              <p class="report-note">Not in an active booking slot</p>
+            </article>
+            <article class="panel report-card">
+              <p class="eyebrow">IN USE NOW</p>
+              <p id="vehiclesInUseCount" class="report-value">0</p>
+              <p class="report-note">Assigned to an ongoing schedule</p>
+            </article>
+          </div>
+
           <section class="panel" aria-labelledby="vehicleSetupTitle">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">INVENTORY</p>
-                <h3 id="vehicleSetupTitle">Vehicle list and IDs</h3>
+                <p class="eyebrow">AVAILABILITY BOARD</p>
+                <h3 id="vehicleSetupTitle">Fleet vehicles</h3>
               </div>
             </div>
-            <p class="page-description">This list follows the account's access permissions. Active vehicles can be assigned during approval; inactive vehicles are shown for reference.</p>
-            <ul id="vehicleInventory" class="vehicle-inventory">
-              <li>Loading vehicles...</li>
-            </ul>
+            <div class="fleet-board-filters">
+              <div class="field">
+                <label for="vehicleSearch">Search vehicles</label>
+                <input id="vehicleSearch" type="search" placeholder="Vehicle name or ID">
+              </div>
+              <div class="field">
+                <label for="vehicleAvailabilityFilter">Availability</label>
+                <select id="vehicleAvailabilityFilter">
+                  <option value="all">All statuses</option>
+                  <option value="available">Available now</option>
+                  <option value="in_use">In use now</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table fleet-board-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Vehicle</th>
+                    <th scope="col">Availability</th>
+                    <th scope="col">Current / Next schedule</th>
+                    <th scope="col">Asset status</th>
+                  </tr>
+                </thead>
+                <tbody id="vehicleBoardBody">
+                  <tr>
+                    <td colspan="4"><p class="empty table-empty">Loading vehicles...</p></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="table-note">Availability reflects approved booking schedules for the current time, not live GPS ignition status.</p>
           </section>
         </section>
       </div>

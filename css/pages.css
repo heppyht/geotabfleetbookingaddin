@@ -259,13 +259,24 @@
 
 .users-filters {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr) minmax(160px, 1fr);
   gap: 14px;
   margin-bottom: 14px;
 }
 
 .users-table {
-  min-width: 800px;
+  min-width: 720px;
+}
+
+.fleet-board-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.fleet-board-table {
+  min-width: 760px;
 }
 
 /* Reports page */
@@ -391,6 +402,7 @@
   .report-grid,
   .report-filter-form,
   .users-filters,
+  .fleet-board-filters,
   .vehicle-inventory {
     grid-template-columns: 1fr;
   }

@@ -139,6 +139,7 @@
             activeDrivers: userDomain.getActiveDrivers(state.users),
             usersLoadState: state.usersLoadState,
             userDomain: userDomain,
+            formatters: fmt,
             isSubmitting: isSubmitting
           }));
         } else if (domain.canAdminCancel(details, state.isAdministrator)) {

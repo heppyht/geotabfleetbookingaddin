@@ -9,6 +9,7 @@
 
   var navigation = document.querySelector('.side-nav');
   var approvalNavButton = navigation.querySelector('[data-page="approval"]');
+  var usersNavButton = navigation.querySelector('[data-page="users"]');
   var approvalPendingBadge = document.getElementById('approvalPendingBadge');
 
   var state = {
@@ -31,14 +32,20 @@
   var usersLoadSequence = 0;
   var listenersBound = false;
 
-  var vehiclesView = ns.VehiclesView.create({ formatters: fmt });
+  var vehiclesView = ns.VehiclesView.create({
+    bookingDomain: bookingDomain,
+    formatters: fmt,
+    state: state
+  });
   var reportsView = ns.ReportsView.create({
     bookingDomain: bookingDomain,
+    userDomain: userDomain,
     formatters: fmt,
     state: state
   });
   var usersView = ns.UsersView.create({
     userDomain: userDomain,
+    bookingDomain: bookingDomain,
     formatters: fmt,
     state: state,
     onRefresh: function (force) {
@@ -69,8 +76,12 @@
     }
   });
 
+  function isAdminOnlyPage(pageName) {
+    return pageName === 'approval' || pageName === 'users';
+  }
+
   function switchPage(pageName) {
-    if (pageName === 'approval' && !state.isAdministrator) {
+    if (isAdminOnlyPage(pageName) && !state.isAdministrator) {
       pageName = 'booking';
     }
     state.activePage = pageName;
@@ -87,34 +98,40 @@
       }
     });
 
-    if (pageName === 'users' || pageName === 'approval') {
+    if ((pageName === 'users' || pageName === 'approval') && state.isAdministrator) {
       loadUsers(state.api, false);
     }
-    if (pageName === 'approval') {
-      approvalView.render();
-    }
+    if (pageName === 'approval') approvalView.render();
+    if (pageName === 'users') usersView.render();
+    if (pageName === 'vehicles') vehiclesView.render();
   }
 
-  function syncApprovalNavigation() {
+  function syncAdminNavigation() {
     approvalNavButton.hidden = !state.isAdministrator;
+    usersNavButton.hidden = !state.isAdministrator;
+
     var pendingCount = bookingDomain.filterApprovalQueue(state.bookings, 'pending').length;
     approvalPendingBadge.textContent = String(pendingCount);
     approvalPendingBadge.hidden = !state.isAdministrator || pendingCount === 0;
 
-    if (!state.isAdministrator && state.activePage === 'approval') {
+    if (!state.isAdministrator && isAdminOnlyPage(state.activePage)) {
       switchPage('booking');
     }
   }
 
   async function loadUsers(api, force) {
-    if (!api || state.usersLoadState === 'loading' || (state.usersLoadState === 'loaded' && !force)) return;
+    if (!api || !state.isAdministrator || state.usersLoadState === 'loading' ||
+        (state.usersLoadState === 'loaded' && !force)) {
+      return;
+    }
+
     var sequence = ++usersLoadSequence;
     state.usersLoadState = 'loading';
     state.users = [];
     state.securityGroupNames = {};
     state.securityGroupsLoaded = false;
     usersView.setLoading(true);
-    usersView.setStatus('Loading users from the current database...', false);
+    usersView.setStatus('Loading drivers and users from the current database...', false);
     usersView.render();
     approvalView.render();
 
@@ -134,6 +151,7 @@
       );
       usersView.render();
       approvalView.render();
+      reportsView.renderRequesterOptions();
     } catch (error) {
       if (sequence === usersLoadSequence) {
         state.users = [];
@@ -179,15 +197,17 @@
 
       state.canBook = Boolean(state.currentUserName);
       bookingView.updateFormState();
-      syncApprovalNavigation();
+      syncAdminNavigation();
 
-      vehiclesView.render(state.devices);
+      vehiclesView.render();
       bookingView.renderList();
       reportsView.renderVehicleOptions();
+      reportsView.renderRequesterOptions();
       reportsView.render();
       approvalView.render();
+      usersView.render();
 
-      if (state.isAdministrator && state.activePage === 'approval') {
+      if (state.isAdministrator && isAdminOnlyPage(state.activePage)) {
         loadUsers(api, false);
       }
 
@@ -207,7 +227,7 @@
         state.canBook = false;
         state.isAdministrator = false;
         bookingView.updateFormState();
-        syncApprovalNavigation();
+        syncAdminNavigation();
         bookingView.setStatus('Unable to load MyGeotab data: ' + fmt.errorText(error), true);
       }
       return null;
@@ -220,6 +240,7 @@
     approvalView.bind();
     reportsView.bind();
     usersView.bind();
+    vehiclesView.bind();
 
     navigation.addEventListener('click', function (event) {
       var button = event.target.closest('[data-page]');
@@ -242,7 +263,7 @@
       },
       focus: function (api) {
         refresh(api, false);
-        if (state.activePage === 'users' || state.activePage === 'approval') {
+        if (state.isAdministrator && isAdminOnlyPage(state.activePage)) {
           loadUsers(api, true);
         }
       },
