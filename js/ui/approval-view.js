@@ -32,6 +32,57 @@
       });
     }
 
+    function resolveRequester(login) {
+      var email = String(login || '').trim();
+      if (!email) return { name: 'Unknown', subtext: '' };
+      var matched = state.users.find(function (user) {
+        return user && String(user.login || '').toLowerCase() === email.toLowerCase();
+      });
+      if (!matched) return { name: email, subtext: '' };
+      var fullName = userDomain.getUserFullName(matched);
+      return fullName.toLowerCase() === email.toLowerCase()
+        ? { name: email, subtext: '' }
+        : { name: fullName, subtext: email };
+    }
+
+    function createSummaryItem(labelText, valueText, subText) {
+      var item = document.createElement('div');
+      item.className = 'trip-summary-item';
+
+      var label = document.createElement('span');
+      label.className = 'trip-summary-label';
+      label.textContent = labelText;
+      item.appendChild(label);
+
+      var value = document.createElement('span');
+      value.className = 'trip-summary-value';
+      value.textContent = valueText;
+      item.appendChild(value);
+
+      if (subText) {
+        var sub = document.createElement('span');
+        sub.className = 'trip-summary-sub';
+        sub.textContent = subText;
+        item.appendChild(sub);
+      }
+      return item;
+    }
+
+    function buildTripSummaryGrid(details) {
+      var grid = document.createElement('div');
+      grid.className = 'trip-summary-grid';
+
+      var requester = resolveRequester(details.createdBy);
+      var schedule = fmt.getScheduleSummary(details.startUtc, details.endUtc);
+      var timeSub = schedule.durationText ? 'Duration: ' + schedule.durationText : '';
+
+      grid.appendChild(createSummaryItem('Requester', requester.name, requester.subtext));
+      grid.appendChild(createSummaryItem('Date', schedule.dateText));
+      grid.appendChild(createSummaryItem('Time & duration', schedule.timeText, timeSub));
+      grid.appendChild(createSummaryItem('Submitted', fmt.formatSubmittedAt(details.createdAtUtc)));
+      return grid;
+    }
+
     function buildCard(record) {
       var details = record.details || {};
       var status = domain.normalizeStatus(details.status);
@@ -48,40 +99,15 @@
       headerRow.className = 'booking-header-row';
       var title = document.createElement('p');
       title.className = 'booking-title';
-      title.textContent = (details.destination || 'No destination') + ' - ' + (details.purpose || 'No purpose');
+      title.textContent = details.destination || details.purpose || 'Booking request';
       headerRow.appendChild(title);
       headerRow.appendChild(fmt.createStatusBadge(status));
       info.appendChild(headerRow);
 
-      var requesterMeta = document.createElement('p');
-      requesterMeta.className = 'booking-meta';
-      requesterMeta.textContent = 'Requested by: ' + (details.createdBy || 'Unknown') +
-        ' | Schedule: ' + fmt.formatDateRange(details.startUtc, details.endUtc);
-      info.appendChild(requesterMeta);
-
-      if (status === 'approved' || status === 'confirmed') {
-        var assignmentMeta = document.createElement('p');
-        assignmentMeta.className = 'booking-meta';
-        assignmentMeta.textContent = 'Vehicle: ' + fmt.resolveDeviceName(details, state.devices) +
-          ' | Driver: ' + (details.driverName || details.driverLogin || 'Unassigned') +
-          (details.reviewedBy ? ' | Approved by: ' + details.reviewedBy : '');
-        info.appendChild(assignmentMeta);
-      } else if (status === 'rejected' && details.reviewedBy) {
-        var rejectedMeta = document.createElement('p');
-        rejectedMeta.className = 'booking-meta';
-        rejectedMeta.textContent = 'Rejected by: ' + details.reviewedBy +
-          (details.reviewedAtUtc ? ' on ' + fmt.formatDate(details.reviewedAtUtc) : '');
-        info.appendChild(rejectedMeta);
-      }
-
-      if (details.approvalNotes) {
-        var notes = document.createElement('p');
-        notes.className = status === 'rejected'
-          ? 'notes-callout notes-callout-rejected'
-          : 'notes-callout';
-        notes.textContent = (status === 'rejected' ? 'Rejection reason: ' : 'Notes: ') + details.approvalNotes;
-        info.appendChild(notes);
-      }
+      var purposeLine = document.createElement('p');
+      purposeLine.className = 'booking-purpose';
+      purposeLine.textContent = 'Purpose: ' + (details.purpose || 'Not specified');
+      info.appendChild(purposeLine);
 
       top.appendChild(info);
 
@@ -100,6 +126,31 @@
       }
 
       card.appendChild(top);
+      card.appendChild(buildTripSummaryGrid(details));
+
+      if (status === 'approved' || status === 'confirmed') {
+        var assignmentMeta = document.createElement('p');
+        assignmentMeta.className = 'booking-meta';
+        assignmentMeta.textContent = 'Assigned vehicle: ' + fmt.resolveDeviceName(details, state.devices) +
+          ' | Driver: ' + (details.driverName || details.driverLogin || 'Unassigned') +
+          (details.reviewedBy ? ' | Approved by: ' + details.reviewedBy : '');
+        card.appendChild(assignmentMeta);
+      } else if (status === 'rejected' && details.reviewedBy) {
+        var rejectedMeta = document.createElement('p');
+        rejectedMeta.className = 'booking-meta';
+        rejectedMeta.textContent = 'Rejected by: ' + details.reviewedBy +
+          (details.reviewedAtUtc ? ' on ' + fmt.formatDate(details.reviewedAtUtc) : '');
+        card.appendChild(rejectedMeta);
+      }
+
+      if (details.approvalNotes) {
+        var notes = document.createElement('p');
+        notes.className = status === 'rejected'
+          ? 'notes-callout notes-callout-rejected'
+          : 'notes-callout';
+        notes.textContent = (status === 'rejected' ? 'Rejection reason: ' : 'Notes: ') + details.approvalNotes;
+        card.appendChild(notes);
+      }
 
       if (status === 'pending' && String(reviewingRecordId) === String(record.id)) {
         var conflicts = domain.getConflictingResources(

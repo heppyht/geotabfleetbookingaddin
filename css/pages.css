@@ -114,6 +114,65 @@
   gap: 14px;
 }
 
+.booking-purpose {
+  margin: 2px 0 0;
+  color: #46586b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.trip-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f4f7fb;
+  border: 1px solid #e1e8f0;
+  border-radius: 8px;
+}
+
+.trip-summary-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.trip-summary-label {
+  color: #52708e;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.trip-summary-value {
+  color: #1c2e40;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.trip-summary-sub {
+  color: #526376;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.field-hint {
+  margin: 0;
+  color: #526376;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.field-hint-warn {
+  color: #8d2923;
+  font-weight: 600;
+}
+
 .approval-review-panel {
   padding-top: 14px;
   border-top: 1px solid #e3e9ef;
@@ -282,7 +341,8 @@
 }
 
 @media (max-width: 900px) {
-  .report-grid {
+  .report-grid,
+  .trip-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
@@ -327,6 +387,7 @@
 
   .booking-form,
   .approval-review-form,
+  .trip-summary-grid,
   .report-grid,
   .report-filter-form,
   .users-filters,

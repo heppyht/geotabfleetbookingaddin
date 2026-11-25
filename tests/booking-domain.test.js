@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const domain = require('../js/domain/booking-domain');
+const formatters = require('../js/ui/formatters');
 
 test('validates required purpose, destination, and UTC interval with epochs', () => {
   const start = '2026-11-25T08:30';
@@ -238,4 +239,22 @@ test('filters approval queue and report history across all statuses', () => {
   assert.deepEqual(domain.filterBookings(bookings, { status: 'rejected', requester: 'alice' }).map((b) => b.id), ['r']);
   assert.deepEqual(domain.filterBookings(bookings, { status: 'approved', deviceId: 'v1' }).map((b) => b.id), ['a']);
   assert.throws(() => domain.filterBookings(bookings, { fromDate: '2026-11-26', toDate: '2026-11-25' }), /on or after/);
+});
+
+test('formats 24-hour schedule summaries and durations for same-day and multi-day trips', () => {
+  const startSameDay = new Date('2026-11-25T14:30:00').toISOString();
+  const endSameDay = new Date('2026-11-25T16:00:00').toISOString();
+  const sameDay = formatters.getScheduleSummary(startSameDay, endSameDay);
+
+  assert.equal(sameDay.dateText, 'Wed, 25 Nov 2026');
+  assert.equal(sameDay.timeText, '14:30 - 16:00');
+  assert.equal(sameDay.durationText, '1h 30m');
+  assert.equal(sameDay.inlineText, 'Wed, 25 Nov 2026, 14:30 - 16:00 (1h 30m)');
+
+  const startMulti = new Date('2026-11-25T14:30:00').toISOString();
+  const endMulti = new Date('2026-11-26T16:30:00').toISOString();
+  const multiDay = formatters.getScheduleSummary(startMulti, endMulti);
+
+  assert.equal(multiDay.dateText, '25 Nov 2026 - 26 Nov 2026');
+  assert.equal(multiDay.durationText, '1d 2h');
 });

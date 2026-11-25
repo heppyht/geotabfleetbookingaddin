@@ -130,10 +130,15 @@
         headerRow.className = 'booking-header-row';
         var title = document.createElement('p');
         title.className = 'booking-title';
-        title.textContent = (details.destination || 'No destination') + ' - ' + (details.purpose || 'No purpose');
+        title.textContent = details.destination || details.purpose || 'Booking request';
         headerRow.appendChild(title);
         headerRow.appendChild(fmt.createStatusBadge(status));
         content.appendChild(headerRow);
+
+        var purposeMeta = document.createElement('p');
+        purposeMeta.className = 'booking-purpose';
+        purposeMeta.textContent = 'Purpose: ' + (details.purpose || 'Not specified');
+        content.appendChild(purposeMeta);
 
         var scheduleMeta = document.createElement('p');
         scheduleMeta.className = 'booking-meta';

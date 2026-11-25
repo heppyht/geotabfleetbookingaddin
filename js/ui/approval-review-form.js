@@ -57,9 +57,11 @@
       : 'No active vehicles available';
     select.appendChild(placeholder);
 
+    var availableCount = 0;
     activeDevices.forEach(function (device) {
       var option = document.createElement('option');
       var conflict = vehicleConflicts[device.id];
+      if (!conflict) availableCount += 1;
       option.value = device.id;
       option.textContent = (device.name || device.id) +
         (conflict ? ' (Unavailable: booked in this slot)' : '');
@@ -67,8 +69,16 @@
       select.appendChild(option);
     });
 
+    var hint = document.createElement('p');
+    hint.className = availableCount === 0 ? 'field-hint field-hint-warn' : 'field-hint';
+    hint.textContent = activeDevices.length === 0
+      ? 'No active vehicles found in this account.'
+      : availableCount + ' of ' + activeDevices.length + ' active ' +
+        (activeDevices.length === 1 ? 'vehicle' : 'vehicles') + ' available for this slot.';
+
     field.appendChild(label);
     field.appendChild(select);
+    field.appendChild(hint);
     return { field: field, select: select };
   }
 
@@ -98,9 +108,11 @@
     }
     select.appendChild(placeholder);
 
+    var availableCount = 0;
     activeDrivers.forEach(function (driver) {
       var option = document.createElement('option');
       var conflict = driverConflicts[driver.id];
+      if (!conflict) availableCount += 1;
       option.value = driver.id;
       option.textContent = userDomain.getUserFullName(driver) +
         (driver.login ? ' (' + driver.login + ')' : '') +
@@ -109,8 +121,24 @@
       select.appendChild(option);
     });
 
+    var hint = document.createElement('p');
+    if (usersLoadState === 'loading') {
+      hint.className = 'field-hint';
+      hint.textContent = 'Loading driver directory...';
+    } else if (usersLoadState === 'error') {
+      hint.className = 'field-hint field-hint-warn';
+      hint.textContent = 'Unable to load drivers. Verify User read access.';
+    } else {
+      hint.className = availableCount === 0 ? 'field-hint field-hint-warn' : 'field-hint';
+      hint.textContent = activeDrivers.length === 0
+        ? 'No active driver accounts found.'
+        : availableCount + ' of ' + activeDrivers.length + ' active ' +
+          (activeDrivers.length === 1 ? 'driver' : 'drivers') + ' available for this slot.';
+    }
+
     field.appendChild(label);
     field.appendChild(select);
+    field.appendChild(hint);
     return { field: field, select: select };
   }
 
@@ -157,7 +185,7 @@
     actions.className = 'form-actions field-wide';
     var submitBtn = document.createElement('button');
     submitBtn.type = 'submit';
-    submitBtn.className = 'success';
+    submitBtn.className = 'fm-btn-approve';
     submitBtn.textContent = 'Confirm approval';
     submitBtn.setAttribute('data-review-submit', 'true');
     submitBtn.disabled = Boolean(isSubmitting);
@@ -189,7 +217,7 @@
       notesInput.placeholder = isReject
         ? 'Explain why this booking request is rejected'
         : 'Optional dispatch notes (pickup instructions, key location)';
-      submitBtn.className = isReject ? 'danger' : 'success';
+      submitBtn.className = isReject ? 'fm-btn-reject' : 'fm-btn-approve';
       submitBtn.textContent = isReject ? 'Confirm rejection' : 'Confirm approval';
       inlineError.hidden = true;
     }
